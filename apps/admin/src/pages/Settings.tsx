@@ -24,7 +24,7 @@ export function Settings() {
           {flagInfo.map((f) => (
             <li key={f.key} className="flex items-center justify-between gap-6 px-5 py-4">
               <div><p className="text-sm font-medium text-heading">{f.label}</p><p className="text-xs text-muted">{f.body}</p></div>
-              <Toggle label={f.label} checked={flags[f.key]} onChange={(v) => { setState((s) => ({ flags: { ...s.flags, [f.key]: v } }), { action: `${v ? 'Enabled' : 'Disabled'} ${f.label.toLowerCase()}`, target: 'feature flag' }); toast(`${f.label} ${v ? 'on' : 'off'}`) }} />
+              <Toggle label={f.label} checked={flags[f.key]} onChange={(v) => { setState((s) => ({ flags: { ...s.flags, [f.key]: v } })); toast(`${f.label} ${v ? 'on' : 'off'}`) }} />
             </li>
           ))}
         </ul>

@@ -1,8 +1,9 @@
-/** Data shapes used across the admin panel. They mirror the planned MongoDB models. */
-import type { ActivityLevel, Goal, Sex } from '@wellpath/shared'
+/** Data shapes for the demo-data pages, plus labels. Real content types come from @wellpath/shared (see ./content). */
+import type { ActivityLevel, Condition, Goal, Sex } from '@wellpath/shared'
+
+export type { Condition }
 
 export type UserStatus = 'active' | 'suspended'
-export type Condition = 'knee_pain' | 'lower_back_pain' | 'high_blood_pressure' | 'shoulder_injury'
 
 export type User = {
   id: string
@@ -24,37 +25,6 @@ export type User = {
   weightChangeKg: number
 }
 
-export type Food = {
-  id: string
-  name: string
-  portion: string
-  grams: number
-  kcal: number
-  proteinG: number
-  carbsG: number
-  fatG: number
-  cuisine: string
-  verified: boolean
-}
-
-export type Exercise = {
-  id: string
-  name: string
-  muscleGroup: string
-  level: 'beginner' | 'intermediate' | 'advanced'
-  equipment: string
-  minutes: number
-}
-
-export type SafetyRule = {
-  id: string
-  condition: Condition
-  blocked: string[]
-  swaps: string
-  notice: string
-  active: boolean
-}
-
 export type Provider = 'gemini' | 'groq' | 'openai'
 export type AiSettings = {
   enabled: boolean
@@ -64,8 +34,6 @@ export type AiSettings = {
   cacheEnabled: boolean
   promptVersion: string
 }
-
-export type AuditEntry = { id: string; at: string; actor: string; action: string; target: string }
 
 export type FeatureFlags = {
   maintenanceMode: boolean
@@ -80,6 +48,7 @@ export const CONDITION_LABEL: Record<Condition, string> = {
   lower_back_pain: 'Lower back pain',
   high_blood_pressure: 'High blood pressure',
   shoulder_injury: 'Shoulder injury',
+  diabetes: 'Diabetes',
 }
 export const GOAL_LABEL: Record<Goal, string> = {
   lose_weight: 'Lose weight',

@@ -73,6 +73,25 @@ const inputCls = 'w-full rounded-xl border border-line bg-white px-3.5 py-2.5 te
 export const Input = (props: InputHTMLAttributes<HTMLInputElement>) => <input {...props} className={`${inputCls} ${props.className ?? ''}`} />
 export const Select = (props: SelectHTMLAttributes<HTMLSelectElement>) => <select {...props} className={`${inputCls} ${props.className ?? ''}`} />
 
+/** A group of on/off pills for choosing several options. */
+export function Chips<T extends string>({ options, value, onChange, label, tone = 'violet' }: { options: readonly T[]; value: readonly T[]; onChange: (v: T[]) => void; label: (o: T) => string; tone?: 'violet' | 'red' }) {
+  const on = tone === 'red' ? 'border-rose/40 bg-red-50 text-red-700' : 'border-violet/40 bg-ink-3 text-violet'
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((o) => {
+        const active = value.includes(o)
+        return (
+          <button
+            key={o} type="button" aria-pressed={active}
+            onClick={() => onChange(active ? value.filter((v) => v !== o) : [...value, o])}
+            className={`rounded-full border px-3 py-1.5 text-sm transition ${active ? on : 'border-line text-text hover:bg-ink-2'}`}
+          >{label(o)}</button>
+        )
+      })}
+    </div>
+  )
+}
+
 export function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
     <button
@@ -151,6 +170,20 @@ export function Empty({ title, body }: { title: string; body: string }) {
       <p className="mt-1 text-sm text-muted">{body}</p>
     </div>
   )
+}
+
+/** Shown in place of a table while it loads, or when loading failed. */
+export function LoadState({ loading, error, onRetry }: { loading: boolean; error: string | null; onRetry: () => void }) {
+  if (error) {
+    return (
+      <div className="px-6 py-14 text-center" role="alert">
+        <p className="font-semibold text-heading">Could not load this page</p>
+        <p className="mt-1 text-sm text-muted">{error}</p>
+        <Button className="mt-4" icon="refresh" onClick={onRetry}>Try again</Button>
+      </div>
+    )
+  }
+  return loading ? <p className="px-6 py-14 text-center text-sm text-muted" role="status">Loading…</p> : null
 }
 
 export function SearchInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {

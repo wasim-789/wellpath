@@ -2,7 +2,6 @@ import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router'
 import { Button, Field, Input } from '../components/ui'
 import { ApiError, login, useAuth } from '../lib/auth'
-import { setState } from '../lib/store'
 
 /** Admin sign-in. Only accounts with the admin role can get in. */
 export function Login() {
@@ -21,8 +20,7 @@ export function Login() {
     if (!password) return setError('Enter your password.')
     setBusy(true)
     try {
-      const user = await login(email, password)
-      setState(() => ({}), { action: 'Signed in', target: user.email })
+      await login(email, password)
       navigate('/')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.')

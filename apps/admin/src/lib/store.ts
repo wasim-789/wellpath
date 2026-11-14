@@ -1,47 +1,42 @@
 /**
- * Tiny persistent store (no extra library) for content that is still demo data.
- * Saves to localStorage so admin changes survive a reload during the demo.
- * Later, swap these functions for real API calls: the pages will not need to change.
- * Sign-in is real and lives in ./auth, not here.
+ * Tiny persistent store (no extra library) for the pages that still use demo data:
+ * users, AI settings and feature flags. Saves to localStorage so changes survive a reload.
+ * Foods, exercises, safety rules and the audit log are real and live in ./content.
+ * Sign-in is real and lives in ./auth.
  */
 import { useSyncExternalStore } from 'react'
-import type { AiSettings, AuditEntry, Exercise, FeatureFlags, Food, SafetyRule, User } from './types'
-import { seedAiSettings, seedAudit, seedExercises, seedFlags, seedFoods, seedRules, seedUsers } from './seed'
-import { currentUser } from './auth'
+import type { AiSettings, FeatureFlags, User } from './types'
+import { seedAiSettings, seedFlags, seedUsers } from './seed'
 
 type State = {
   users: User[]
-  foods: Food[]
-  exercises: Exercise[]
-  rules: SafetyRule[]
   ai: AiSettings
   flags: FeatureFlags
-  audit: AuditEntry[]
 }
 
-const KEY = 'wellpath-admin-v1'
+// v2: foods, exercises, rules and audit moved to the API, so older saved copies are ignored.
+const KEY = 'wellpath-admin-v2'
 
 function load(): State {
   try {
     const raw = localStorage.getItem(KEY)
     if (raw) return JSON.parse(raw) as State
   } catch { /* storage blocked: fall back to seed */ }
-  return { users: seedUsers(), foods: seedFoods, exercises: seedExercises, rules: seedRules, ai: seedAiSettings, flags: seedFlags, audit: seedAudit }
+  return { users: seedUsers(), ai: seedAiSettings, flags: seedFlags }
 }
 
 let state: State = load()
 const listeners = new Set<() => void>()
 
 function save() {
-  try { localStorage.setItem(KEY, JSON.stringify(state)) } catch { /* ignore */ }
+  try {
+    localStorage.setItem(KEY, JSON.stringify(state))
+    localStorage.removeItem('wellpath-admin-v1')
+  } catch { /* ignore */ }
 }
 
-export function setState(update: (s: State) => Partial<State>, audit?: { action: string; target: string }) {
+export function setState(update: (s: State) => Partial<State>) {
   state = { ...state, ...update(state) }
-  if (audit) {
-    const entry: AuditEntry = { id: crypto.randomUUID(), at: new Date().toISOString(), actor: currentUser()?.email ?? 'system', ...audit }
-    state = { ...state, audit: [entry, ...state.audit].slice(0, 500) }
-  }
   save()
   listeners.forEach((l) => l())
 }
@@ -59,5 +54,3 @@ export function resetDemoData() {
   save()
   listeners.forEach((l) => l())
 }
-
-export const newId = (prefix: string) => `${prefix}_${Math.random().toString(36).slice(2, 9)}`

@@ -35,8 +35,8 @@ export function Users() {
   const allOnPage = rows.length > 0 && rows.every((r) => selected.includes(r.id))
 
   const setSortKey = (key: SortKey) => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : -1 }))
-  const updateUsers = (ids: string[], patch: Partial<User>, action: string, target: string) => {
-    setState((s) => ({ users: s.users.map((u) => (ids.includes(u.id) ? { ...u, ...patch } : u)) }), { action, target })
+  const updateUsers = (ids: string[], patch: Partial<User>) => {
+    setState((s) => ({ users: s.users.map((u) => (ids.includes(u.id) ? { ...u, ...patch } : u)) }))
   }
   const exportCsv = () => {
     const head = ['id', 'name', 'email', 'country', 'goal', 'status', 'joinedAt']
@@ -75,8 +75,8 @@ export function Users() {
         {selected.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-b border-line bg-ink-3/60 px-4 py-2.5 text-sm">
             <span className="font-semibold text-violet">{selected.length} selected</span>
-            <Button onClick={() => { updateUsers(selected, { aiQuestionsToday: 0 }, 'Reset AI limit', `${selected.length} users`); toast('AI limits reset'); setSelected([]) }}>Reset AI limit</Button>
-            <Button onClick={() => setConfirm({ title: 'Suspend users', body: `Suspend ${selected.length} users? They will not be able to sign in.`, label: 'Suspend', danger: true, run: () => { updateUsers(selected, { status: 'suspended' }, 'Suspended users', `${selected.length} users`); toast('Users suspended'); setSelected([]) } })}>Suspend</Button>
+            <Button onClick={() => { updateUsers(selected, { aiQuestionsToday: 0 }); toast('AI limits reset'); setSelected([]) }}>Reset AI limit</Button>
+            <Button onClick={() => setConfirm({ title: 'Suspend users', body: `Suspend ${selected.length} users? They will not be able to sign in.`, label: 'Suspend', danger: true, run: () => { updateUsers(selected, { status: 'suspended' }); toast('Users suspended'); setSelected([]) } })}>Suspend</Button>
             <Button variant="ghost" onClick={() => setSelected([])}>Clear</Button>
           </div>
         )}
@@ -113,9 +113,9 @@ export function Users() {
       {open && (
         <UserDrawer
           user={open} limit={limit} onClose={() => setOpenId(null)}
-          onToggleStatus={() => { const s = open.status === 'active' ? 'suspended' : 'active'; updateUsers([open.id], { status: s }, s === 'active' ? 'Reactivated user' : 'Suspended user', open.email); toast(s === 'active' ? 'User reactivated' : 'User suspended') }}
-          onResetAi={() => { updateUsers([open.id], { aiQuestionsToday: 0 }, 'Reset AI limit', open.email); toast('AI limit reset') }}
-          onDelete={() => setConfirm({ title: 'Delete user', body: `Permanently delete ${open.name} and all their data? This cannot be undone.`, label: 'Delete user', danger: true, run: () => { setState((s) => ({ users: s.users.filter((u) => u.id !== open.id) }), { action: 'Deleted user', target: open.email }); setOpenId(null); toast('User deleted') } })}
+          onToggleStatus={() => { const s = open.status === 'active' ? 'suspended' : 'active'; updateUsers([open.id], { status: s }); toast(s === 'active' ? 'User reactivated' : 'User suspended') }}
+          onResetAi={() => { updateUsers([open.id], { aiQuestionsToday: 0 }); toast('AI limit reset') }}
+          onDelete={() => setConfirm({ title: 'Delete user', body: `Permanently delete ${open.name} and all their data? This cannot be undone.`, label: 'Delete user', danger: true, run: () => { setState((s) => ({ users: s.users.filter((u) => u.id !== open.id) })); setOpenId(null); toast('User deleted') } })}
         />
       )}
       {confirm && <Confirm title={confirm.title} body={confirm.body} confirmLabel={confirm.label} danger={confirm.danger} onConfirm={confirm.run} onClose={() => setConfirm(null)} />}

@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { Icon } from './icons'
 import { Avatar, Badge } from './ui'
 import { Toaster } from './toast'
-import { setState, useStore } from '../lib/store'
+import { useStore } from '../lib/store'
 import { logout, useAuth } from '../lib/auth'
 
 const nav = [
@@ -56,7 +56,7 @@ export function Layout() {
           </div>
           <button
             className="rounded-lg p-2 text-muted hover:bg-ink-2 hover:text-heading" aria-label="Sign out"
-            onClick={async () => { setState(() => ({}), { action: 'Signed out', target: user?.email ?? '-' }); await logout(); navigate('/login') }}
+            onClick={async () => { await logout(); navigate('/login') }}
           ><Icon name="logout" /></button>
         </div>
       </div>
