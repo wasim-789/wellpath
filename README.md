@@ -30,6 +30,15 @@ Open http://localhost:5173 for the web app. The admin dashboard at http://localh
 
 Run `npm run doctor` to check `apps/api/.env` and the MongoDB connection.
 
+### Starter foods and exercises
+
+```bash
+npm run seed            # adds missing starter foods and exercises (safe to run any time)
+npm run seed -- --force # resets seeded items to the code version (loses admin edits)
+```
+
+Every starter food is marked unverified. Its source note says where the numbers came from, and someone should check it before marking it verified.
+
 ### Email (password reset)
 
 Without email settings, reset emails are printed in the API terminal, so the flow works locally with no setup. To send real email with Gmail, turn on 2-Step Verification, create an app password (Google Account > Security > App passwords), and set `SMTP_HOST=smtp.gmail.com`, `SMTP_USER`, `SMTP_PASS` and `MAIL_FROM` in `apps/api/.env`. See `.env.example`.
