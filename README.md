@@ -91,6 +91,13 @@ Before deploying: browsers such as Safari block cookies from another site, which
 | POST | `/api/v1/admin/auth/refresh` | Swap the admin refresh cookie for a new access token |
 | POST | `/api/v1/admin/auth/logout` | End the admin session |
 | GET | `/api/v1/admin/auth/me` | Current admin |
+| GET, POST | `/api/v1/admin/foods` | List or add foods (admins only, like every `/admin` route) |
+| PUT, DELETE | `/api/v1/admin/foods/:slug` | Edit or delete a food (the slug never changes) |
+| POST | `/api/v1/admin/foods/:slug/verify` | Mark a food's values as checked |
+| GET, POST | `/api/v1/admin/exercises` | List or add exercises |
+| PUT, DELETE | `/api/v1/admin/exercises/:slug` | Edit or delete an exercise |
+| GET | `/api/v1/admin/safety-rules` | The engine's condition rules and which exercises they leave out (read-only) |
+| GET | `/api/v1/admin/audit` | Admin sign-ins and content changes, newest first (`?before=<id>` for older) |
 
 ## Tech stack
 

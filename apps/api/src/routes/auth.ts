@@ -25,6 +25,7 @@ import { requireAuth } from "../middleware/requireAuth.js";
 import type { SessionClient } from "../models/Session.js";
 import { User, type UserDocument, toPublicUser } from "../models/User.js";
 import { deleteUserData, isLastAdmin } from "../services/accounts.js";
+import { recordAudit } from "../services/audit.js";
 import { requestPasswordReset, resetPassword } from "../services/passwordReset.js";
 
 type AuthRouterOptions = {
@@ -139,6 +140,7 @@ function createAuthRouter({ client, cookieName, cookiePath, adminOnly, selfServi
       throw new HttpError(401, "Invalid email or password");
     }
     if (user.status !== "active") throw new HttpError(403, "This account is suspended");
+    if (adminOnly) await recordAudit({ id: user._id, email: user.email }, "Signed in", "Admin panel");
     await signIn(res, user);
   });
 
@@ -161,8 +163,12 @@ function createAuthRouter({ client, cookieName, cookiePath, adminOnly, selfServi
 
   router.post("/logout", async (req, res) => {
     const token = readRefreshCookie(req);
-    if (token) await endSession(token, client);
+    const userId = token ? await endSession(token, client) : null;
     clearRefreshCookie(res);
+    if (adminOnly && userId) {
+      const user = await User.findById(userId, { email: 1 });
+      if (user) await recordAudit({ id: user._id, email: user.email }, "Signed out", "Admin panel");
+    }
     res.status(204).end();
   });
 

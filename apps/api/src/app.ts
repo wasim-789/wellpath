@@ -7,6 +7,7 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { env } from "./config/env.js";
+import { adminRouter } from "./routes/admin.js";
 import { adminAuthRouter, authRouter } from "./routes/auth.js";
 import { healthRouter } from "./routes/health.js";
 import { planRouter } from "./routes/plan.js";
@@ -25,7 +26,9 @@ export function createApp() {
 
   app.use("/health", healthRouter);
   app.use("/api/v1/auth", authRouter);
-  app.use("/api/v1/admin/auth", adminAuthRouter);
+  // notFound here keeps unknown /admin/auth paths a 404 instead of falling through to the admin guard.
+  app.use("/api/v1/admin/auth", adminAuthRouter, notFound);
+  app.use("/api/v1/admin", adminRouter);
   app.use("/api/v1/plan", planRouter);
   app.use("/api/v1/profile", profileRouter);
 
