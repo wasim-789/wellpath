@@ -16,6 +16,50 @@ export const FOOD_CATEGORIES = [
 /** Local portion words people actually use, so "1 katori daal" means something. */
 export const PORTION_UNITS = ["piece", "roti", "katori", "plate", "bowl", "glass", "cup", "slice", "handful", "tbsp", "gram"] as const;
 
+/**
+ * How a food is eaten in a meal, so the planner builds plates people recognise:
+ *   staple    eaten with a main: roti, naan, plain rice
+ *   main      a curry or protein that needs a staple: daal, sabzi, karahi, omelette
+ *   complete  a meal on its own: biryani, pulao, oats, chana chaat
+ *   side      a small extra: raita, salad, dahi, fruit
+ *   drink     chai, lassi, milk
+ */
+export const MEAL_ROLES = ["staple", "main", "complete", "side", "drink"] as const;
+export type MealRole = (typeof MEAL_ROLES)[number];
+
+/** The usual role for each category. A food's own role, when set, wins. */
+export const DEFAULT_ROLE: Record<(typeof FOOD_CATEGORIES)[number], MealRole> = {
+  bread: "staple",
+  rice: "staple",
+  lentils: "main",
+  vegetables: "main",
+  meat: "main",
+  fish: "main",
+  eggs: "main",
+  dairy: "side",
+  drinks: "drink",
+  fruit: "side",
+  salad: "side",
+  soup: "side",
+  snacks: "complete",
+  breakfast: "complete",
+};
+
+/**
+ * Health tags for condition food rules (see packages/engine/src/safety.ts).
+ *   sugary        most of its energy is sugar: sweetened chai, sweet lassi, dates, desserts
+ *   refined_carb  white rice, maida or fried breads that raise blood sugar quickly
+ *   high_salt     very salty dishes and snacks: nihari, pakora, salted lassi
+ */
+export const FOOD_TAGS = ["sugary", "refined_carb", "high_salt"] as const;
+export type FoodTag = (typeof FOOD_TAGS)[number];
+
+export const FOOD_TAG_LABEL: Record<FoodTag, string> = {
+  sugary: "high in sugar",
+  refined_carb: "refined carbs (white rice, naan, paratha)",
+  high_salt: "high in salt",
+};
+
 export const nutrientsSchema = z.object({
   kcal: z.number().min(0).max(900),
   proteinG: z.number().min(0).max(100),
@@ -40,6 +84,8 @@ export const foodSchema = z
     /** How people write it in Roman Urdu, used later for text logging ("2 roti aur daal"). */
     nameRoman: z.string().trim().max(80).optional(),
     category: z.enum(FOOD_CATEGORIES),
+    /** Leave out to use the category's usual role (DEFAULT_ROLE). */
+    role: z.enum(MEAL_ROLES).optional(),
     /**
      * The most restrictive diet this food suits. "vegetarian" includes dairy but no eggs,
      * "eggetarian" adds eggs, "non_vegetarian" contains meat or fish.
@@ -48,6 +94,8 @@ export const foodSchema = z
     mealSlots: z.array(z.enum(MEAL_SLOTS)).min(1),
     per100g: nutrientsSchema,
     portions: z.array(portionSchema).min(1),
+    /** Health tags used by the condition food rules. Tag honestly: missing tags let unsafe foods through. */
+    tags: z.array(z.enum(FOOD_TAGS)).optional(),
     /** Another food this is a version of, such as beef biryani of chicken biryani. */
     variantOf: slugField.optional(),
     /** Occasional foods (fried, very sweet). The planner uses them rarely. */
