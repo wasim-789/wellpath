@@ -30,9 +30,9 @@ export const CONDITION_OPTIONS: { value: Condition; label: string }[] = [
 ]
 
 export const DIET_OPTIONS: { value: DietType; label: string; hint: string }[] = [
-  { value: 'non_vegetarian', label: 'Non-vegetarian', hint: 'Meat, fish and eggs' },
-  { value: 'eggetarian', label: 'Vegetarian plus eggs', hint: 'No meat or fish' },
-  { value: 'vegetarian', label: 'Vegetarian', hint: 'No meat, fish or eggs' },
+  { value: 'non_vegetarian', label: 'Both vegetarian and non-vegetarian', hint: 'Daal and sabzi, plus meat, fish and eggs' },
+  { value: 'eggetarian', label: 'Vegetarian plus eggs', hint: 'Daal, sabzi and eggs. No meat or fish' },
+  { value: 'vegetarian', label: 'Vegetarian only', hint: 'Daal, sabzi and dairy. No meat, fish or eggs' },
 ]
 
 export const labelOf = <T extends string | number>(options: { value: T; label: string }[], value: T) =>

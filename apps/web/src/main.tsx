@@ -10,6 +10,7 @@ import { ResetPassword } from './pages/ResetPassword.tsx'
 import { Home } from './pages/Home.tsx'
 import { Onboarding } from './pages/Onboarding.tsx'
 import { Settings } from './pages/Settings.tsx'
+import { Meals } from './pages/Meals.tsx'
 import { Toaster } from './components/Toaster.tsx'
 import { restoreSession, useAuth, wasSignedOutOnPurpose } from './lib/auth.ts'
 
@@ -36,6 +37,7 @@ const router = createBrowserRouter([
   { path: '/reset-password', element: <ResetPassword /> },
   { path: '/app', element: <RequireUser><Home /></RequireUser> },
   { path: '/onboarding', element: <RequireUser><Onboarding /></RequireUser> },
+  { path: '/meals', element: <RequireUser><Meals /></RequireUser> },
   { path: '/settings', element: <RequireUser><Settings /></RequireUser> },
   { path: '*', element: <Navigate to="/" replace /> },
 ])
