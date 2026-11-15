@@ -1,13 +1,20 @@
 import { useMemo, useState } from 'react'
 import { nutrientsForPortion } from '@wellpath/engine'
-import { DIET_TYPES, FOOD_CATEGORIES, MEAL_SLOTS, PORTION_UNITS, foodSchema, type DietType, type Food, type Nutrients } from '@wellpath/shared'
+import { DEFAULT_ROLE, DIET_TYPES, FOOD_CATEGORIES, FOOD_TAGS, FOOD_TAG_LABEL, MEAL_ROLES, MEAL_SLOTS, PORTION_UNITS, foodSchema, type DietType, type Food, type MealRole, type Nutrients } from '@wellpath/shared'
 import { Badge, Button, Card, Chips, Confirm, Empty, Field, Input, LoadState, Modal, PageHeader, SearchInput, Select, Toggle, td, th } from '../components/ui'
 import { toast } from '../components/toast'
 import { ApiError } from '../lib/auth'
 import { foodsApi, humanize, issueMap, slugify, useLoad, type Stored } from '../lib/content'
 
 const DIET_LABEL: Record<DietType, string> = { vegetarian: 'Vegetarian', eggetarian: 'Eggetarian', non_vegetarian: 'Non-veg' }
-const dietTone = { vegetarian: 'green', eggetarian: 'amber', non_vegetarian: 'red' } as const
+const ROLE_LABEL: Record<MealRole, string> = {
+  staple: 'Staple, eaten with a curry (roti, rice)',
+  main: 'Main, needs roti or rice (daal, karahi)',
+  complete: 'Complete meal on its own (biryani, oats)',
+  side: 'Side (raita, salad, fruit)',
+  drink: 'Drink (chai, lassi)',
+}
+const dietTone ={ vegetarian: 'green', eggetarian: 'amber', non_vegetarian: 'red' } as const
 
 const blank: Food = {
   slug: '', name: '', category: 'vegetables', dietCategory: 'vegetarian', mealSlots: ['lunch', 'dinner'],
@@ -128,6 +135,8 @@ function clean(f: Food): Food {
   if (!f.nameRoman?.trim()) delete out.nameRoman
   else out.nameRoman = f.nameRoman.trim()
   if (!f.variantOf) delete out.variantOf
+  if (!f.role) delete out.role
+  if (!f.tags?.length) delete out.tags
   return out
 }
 
@@ -190,6 +199,12 @@ function FoodForm({ initial, isNew, foods, onClose, onSaved }: { initial: Food; 
         <Field label="Category">
           <Select value={f.category} onChange={(e) => update({ category: e.target.value as Food['category'] })}>{FOOD_CATEGORIES.map((c) => <option key={c} value={c}>{humanize(c)}</option>)}</Select>
         </Field>
+        <Field label="How it is eaten" hint="The meal planner builds plates from these roles">
+          <Select value={f.role ?? ''} onChange={(e) => update({ role: (e.target.value || undefined) as Food['role'] })}>
+            <option value="">Usual for {humanize(f.category).toLowerCase()}: {ROLE_LABEL[DEFAULT_ROLE[f.category]].toLowerCase()}</option>
+            {MEAL_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+          </Select>
+        </Field>
         <Field label="Diet" hint="Vegetarian includes dairy. Eggetarian adds eggs.">
           <Select value={f.dietCategory} onChange={(e) => update({ dietCategory: e.target.value as DietType })}>{DIET_TYPES.map((d) => <option key={d} value={d}>{DIET_LABEL[d]}</option>)}</Select>
         </Field>
@@ -197,6 +212,11 @@ function FoodForm({ initial, isNew, foods, onClose, onSaved }: { initial: Food; 
           <p className="text-sm font-medium text-heading">Meals it suits</p>
           <div className="mt-1.5"><Chips options={MEAL_SLOTS} value={f.mealSlots} onChange={(mealSlots) => update({ mealSlots })} label={humanize} /></div>
           {err.mealSlots && <p className="mt-1 text-xs text-rose">Pick at least one meal.</p>}
+        </div>
+        <div className="sm:col-span-2">
+          <p className="text-sm font-medium text-heading">Health tags</p>
+          <p className="text-xs text-muted">Safety rules use these: diabetes leaves out sugary foods and limits refined carbs, high blood pressure leaves out salty foods.</p>
+          <div className="mt-1.5"><Chips tone="red" options={FOOD_TAGS} value={f.tags ?? []} onChange={(tags) => update({ tags })} label={(t) => FOOD_TAG_LABEL[t]} /></div>
         </div>
         <div className="flex items-center justify-between gap-4 rounded-xl border border-line px-4 py-3 sm:col-span-2">
           <div><p className="text-sm font-medium text-heading">Treat</p><p className="text-xs text-muted">Fried or very sweet. The planner uses treats rarely.</p></div>

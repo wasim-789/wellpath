@@ -3,7 +3,7 @@
  * Every call goes through the signed-in admin session (see ./auth).
  */
 import { useCallback, useEffect, useState } from 'react'
-import type { Condition, Exercise, ExerciseLoad, ExerciseType, Food } from '@wellpath/shared'
+import type { Condition, Exercise, ExerciseLoad, ExerciseType, Food, FoodTag } from '@wellpath/shared'
 import { api } from './auth'
 
 export type Stored<T> = T & { updatedAt: string }
@@ -15,6 +15,11 @@ export type SafetyRule = {
   blockedExercises: { slug: string; name: string }[]
   /** Safe beginner exercises left for someone with only this condition. */
   beginnerLeft: Record<ExerciseType, number>
+  /** Food tags never planned, and tags planned rarely, for this condition. */
+  avoidTags: FoodTag[]
+  limitTags: FoodTag[]
+  blockedFoods: { slug: string; name: string }[]
+  limitedFoods: { slug: string; name: string }[]
   usersAffected: number
 }
 

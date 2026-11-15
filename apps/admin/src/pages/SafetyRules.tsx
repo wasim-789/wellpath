@@ -1,5 +1,5 @@
 import { Link } from 'react-router'
-import { LOAD_LABEL } from '@wellpath/shared'
+import { FOOD_TAG_LABEL, LOAD_LABEL } from '@wellpath/shared'
 import { Badge, Button, Card, LoadState, PageHeader } from '../components/ui'
 import { Icon } from '../components/icons'
 import { humanize, safetyApi, useLoad } from '../lib/content'
@@ -15,14 +15,14 @@ export function SafetyRules() {
     <div className="fade-in">
       <PageHeader
         title="Safety rules"
-        sub="Exercises left out for people who report an injury or condition. The AI coach cannot override these."
+        sub="Exercises and foods left out for people who report an injury or condition. The AI coach cannot override these."
         actions={<Button icon="refresh" onClick={reload} disabled={loading}>Refresh</Button>}
       />
       <Card className="mb-4 flex items-start gap-3 p-4">
         <span className="mt-0.5 text-violet"><Icon name="shield" /></span>
         <p className="text-sm text-text">
           These rules are part of the plan engine and are covered by automated tests, so they cannot be switched off here.
-          To change who an exercise is hidden from, edit its safety tags on the <Link to="/exercises" className="font-semibold text-violet hover:underline">Exercises</Link> page.
+          To change who an exercise or food is hidden from, edit its tags on the <Link to="/exercises" className="font-semibold text-violet hover:underline">Exercises</Link> or <Link to="/foods" className="font-semibold text-violet hover:underline">Foods</Link> page.
         </p>
       </Card>
       {!data ? <Card><LoadState loading={loading} error={error} onRetry={reload} /></Card> : (
@@ -56,6 +56,16 @@ export function SafetyRules() {
                     Too few safe {short.join(' and ')} exercises for beginners (the planner needs {short.map((t) => `${MINIMUM[t]} ${t}`).join(', ')}). Add gentler exercises.
                   </p>
                 )}
+
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted">Meal plan</p>
+                {r.avoidTags.length || r.limitTags.length ? (
+                  <ul className="mt-1 list-inside list-disc text-sm text-text">
+                    {r.avoidTags.map((t) => <li key={t}>Leaves out foods {FOOD_TAG_LABEL[t]}</li>)}
+                    {r.limitTags.map((t) => <li key={t}>Plans {FOOD_TAG_LABEL[t]} less often</li>)}
+                  </ul>
+                ) : <p className="mt-1 text-sm text-text">No food changes.</p>}
+                {r.blockedFoods.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{r.blockedFoods.map((f) => <Badge key={f.slug} tone="red">{f.name}</Badge>)}</div>}
+                {r.limitedFoods.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{r.limitedFoods.map((f) => <Badge key={f.slug} tone="amber">{f.name}</Badge>)}</div>}
 
                 <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted">Notice shown to the user</p>
                 <p className="mt-1 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">{r.notice}</p>
