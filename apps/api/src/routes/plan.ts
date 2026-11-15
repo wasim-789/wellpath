@@ -5,6 +5,7 @@
  *   GET    /meals/alternatives     other plates for one meal (?week, day=0-6, slot)
  *   PUT    /meals/swap             swap one meal for one of those alternatives
  *   DELETE /meals/swap             put one meal back to the original plan (?week, day, slot)
+ *   GET    /workouts               this week's home workouts for the signed-in user (?week like /meals)
  *
  * The meal plan is rebuilt on each request. It is deterministic (seeded by user and week),
  * so the same week shows the same meals until the profile or the food library changes.
@@ -12,10 +13,11 @@
  */
 import { type Request, Router } from "express";
 import { z } from "zod";
-import { calculateDailyTargets, mealAlternatives, mealChoice, planMeals, sameChoice, type MealSwap as Swap } from "@wellpath/engine";
-import { type Food, MEAL_SLOTS, profileSchema } from "@wellpath/shared";
+import { calculateDailyTargets, mealAlternatives, mealChoice, planMeals, planWorkouts, sameChoice, type MealSwap as Swap } from "@wellpath/engine";
+import { type Exercise, type Food, MEAL_SLOTS, profileSchema } from "@wellpath/shared";
 import { HttpError } from "../middleware/errors.js";
 import { requireAuth } from "../middleware/requireAuth.js";
+import { ExerciseModel } from "../models/Exercise.js";
 import { FoodModel } from "../models/Food.js";
 import { MealSwap } from "../models/MealSwap.js";
 import { User, toSavedProfile } from "../models/User.js";
@@ -55,13 +57,19 @@ const swapBody = mealRef.extend({
     .max(6),
 });
 
-/** Everything the planner needs for this user and week, including their saved swaps. */
-async function planInput(req: Request, weekValue: unknown) {
+/** The signed-in user, their saved answers and the requested week. */
+async function planner(req: Request, weekValue: unknown) {
   const week = requestedWeek(weekValue);
   const user = await User.findById(req.auth!.userId);
   if (!user || user.status !== "active") throw new HttpError(401, "Not signed in");
   const profile = toSavedProfile(user);
   if (!profile) throw new HttpError(409, "Finish onboarding first, so we know what to plan for.");
+  return { user, profile, week };
+}
+
+/** Everything the meal planner needs for this user and week, including their saved swaps. */
+async function planInput(req: Request, weekValue: unknown) {
+  const { user, profile, week } = await planner(req, weekValue);
 
   const targets = calculateDailyTargets(profile);
   const [foods, swaps] = await Promise.all([
@@ -111,4 +119,10 @@ planRouter.delete("/meals/swap", requireAuth, async (req, res) => {
   await MealSwap.deleteOne({ userId: user._id, weekStart: week, day, slot });
   const swaps = input.swaps.filter((s) => !(s.day === day && s.slot === slot));
   res.json({ weekStart: week, plan: planMeals({ ...input, swaps }) });
+});
+
+planRouter.get("/workouts", requireAuth, async (req, res) => {
+  const { user, profile, week } = await planner(req, req.query.week);
+  const exercises = await ExerciseModel.find({}, { _id: 0, __v: 0, createdAt: 0, updatedAt: 0 }).lean<Exercise[]>();
+  res.json({ weekStart: week, plan: planWorkouts({ profile, exercises, seed: `${user.id}|${week}` }) });
 });

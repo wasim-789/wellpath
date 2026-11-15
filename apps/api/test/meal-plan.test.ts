@@ -59,7 +59,7 @@ describe("meal plans from the starter foods", () => {
   );
 
   it.each(conditionCases)("%s: still full and on target, with no food the condition rules out", (_label, profile, dietType: DietType, conditions) => {
-    const targets = calculateDailyTargets({ ...profile, conditions });
+    const targets = calculateDailyTargets(profile);
     const plan = planMeals({ targets, dietType, conditions, foods: SEED_FOODS, seed: "test|2026-11-16" });
     for (const day of plan.days) {
       expect(Math.abs(day.totals.kcal - targets.calories), `day ${day.day}`).toBeLessThanOrEqual(targets.calories * 0.1);

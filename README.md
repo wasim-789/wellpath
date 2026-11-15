@@ -11,7 +11,7 @@ AI powered personalized health and lifestyle planner. A rule engine builds every
 | `apps/api` | Backend API (Node, Express, TypeScript, MongoDB) | http://localhost:4000 |
 | `apps/web` | User web app (React, Vite, TypeScript) | http://localhost:5173 |
 | `apps/admin` | Admin panel (React, Vite, TypeScript) | http://localhost:5174 |
-| `packages/engine` | Plan engine: BMR, TDEE, calorie and macro targets (pure functions + tests) | imported by api |
+| `packages/engine` | Plan engine: calorie and macro targets, safety rules, meal and workout planners (pure functions + tests) | imported by api |
 | `packages/shared` | Zod schemas and types shared by all apps | imported everywhere |
 
 ## Run locally
@@ -80,6 +80,7 @@ Before deploying: browsers such as Safari block cookies from another site, which
 | GET | `/api/v1/plan/meals` | This week's 7-day meal plan from the saved profile (signed in; `?week=<Monday>`). Same week, same plan |
 | GET | `/api/v1/plan/meals/alternatives` | Up to 3 other plates for one meal (`?week`, `day=0-6`, `slot`), same diet, safety rules and calories |
 | PUT, DELETE | `/api/v1/plan/meals/swap` | Swap one meal for an offered alternative, or put it back. Cleared when the profile changes |
+| GET | `/api/v1/plan/workouts` | This week's home workouts (3 to 5 days, fits your minutes, level and safety rules; `?week=<Monday>`) |
 | POST | `/api/v1/auth/register` | Create an account and start a session |
 | POST | `/api/v1/auth/login` | Sign in and start a session |
 | POST | `/api/v1/auth/refresh` | Swap the refresh cookie for a new access token |
