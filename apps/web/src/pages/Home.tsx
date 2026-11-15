@@ -1,11 +1,14 @@
 /** Signed-in home: sends new users to onboarding, then shows their targets. */
 import { Link, Navigate } from 'react-router'
+import { workoutReasonText } from '@wellpath/engine'
 import { AppShell } from '../components/app/AppShell'
 import { TargetsCard } from '../components/app/TargetsCard'
 import { useAuth } from '../lib/auth'
 import { GOAL_OPTIONS, labelOf } from '../lib/labels'
-import { MEAL_LABEL, todayIndex, useMealPlan } from '../lib/meals'
+import { MEAL_LABEL, useMealPlan } from '../lib/meals'
 import { useProfile } from '../lib/profile'
+import { todayIndex } from '../lib/week'
+import { FOCUS_LABEL, useWorkoutPlan } from '../lib/workouts'
 
 /** A short list of today's meals, linking to the full week. */
 function TodayMeals() {
@@ -33,6 +36,37 @@ function TodayMeals() {
             ))}
           </ul>
           <Link to="/meals" className="btn-primary mt-5 inline-block rounded-xl px-5 py-2.5 text-sm font-semibold text-white">See portions and the whole week</Link>
+        </>
+      )}
+    </div>
+  )
+}
+
+/** Today's workout in one line, or the rest-day note, linking to the full week. */
+function TodayWorkout() {
+  const { state, retry } = useWorkoutPlan()
+  const today = state.status === 'ready' ? state.data.plan.days[todayIndex()] : null
+  return (
+    <div className="card h-fit p-6">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-lg font-bold text-heading">Today's workout</h2>
+        {today?.session && <p className="text-sm tabular-nums text-muted">{today.session.minutes} min</p>}
+      </div>
+      {state.status === 'loading' && <p className="mt-3 text-sm text-muted" role="status">Planning your workout…</p>}
+      {state.status === 'error' && (
+        <p className="mt-3 text-sm text-heading" role="alert">
+          {state.message} <button type="button" onClick={retry} className="font-semibold text-violet hover:underline">Try again</button>
+        </p>
+      )}
+      {today && (
+        <>
+          {today.session ? (
+            <>
+              <p className="mt-3 text-xs font-semibold uppercase tracking-wider text-muted">{FOCUS_LABEL[today.session.focus]}</p>
+              <p className="text-sm text-heading">{today.session.main.map((e) => e.name).join(', ')}</p>
+            </>
+          ) : <p className="mt-3 text-sm text-heading">{workoutReasonText(today.reasons[0])}</p>}
+          <Link to="/workouts" className="btn-primary mt-5 inline-block rounded-xl px-5 py-2.5 text-sm font-semibold text-white">See the steps and the whole week</Link>
         </>
       )}
     </div>
@@ -67,7 +101,10 @@ export function Home() {
           </div>
           <div className="mt-8 grid gap-6 lg:grid-cols-[1.2fr_1fr]">
             <TargetsCard targets={state.data.targets} notices={state.data.notices} />
-            <TodayMeals />
+            <div className="space-y-6">
+              <TodayMeals />
+              <TodayWorkout />
+            </div>
           </div>
         </>
       )}

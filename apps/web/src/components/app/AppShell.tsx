@@ -17,7 +17,12 @@ export function AppShell({ children, narrow = false }: { children: ReactNode; na
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between gap-3 px-4 sm:px-6">
           <Logo href="/app" />
           <div className="flex min-w-0 items-center gap-3">
-            <span className="hidden truncate text-sm text-muted md:inline">{email}</span>
+            <span className="hidden truncate text-sm text-muted lg:inline">{email}</span>
+            {[['/meals', 'Meals'], ['/workouts', 'Workouts']].map(([to, label]) => (
+              <NavLink key={to} to={to} className={({ isActive }) => `hidden shrink-0 rounded-xl px-3 py-2 text-sm font-semibold hover:bg-ink-2 sm:inline-block ${isActive ? 'text-violet' : 'text-heading'}`}>
+                {label}
+              </NavLink>
+            ))}
             <NavLink to="/settings" className={({ isActive }) => `shrink-0 rounded-xl px-3 py-2 text-sm font-semibold hover:bg-ink-2 ${isActive ? 'text-violet' : 'text-heading'}`}>
               Settings
             </NavLink>

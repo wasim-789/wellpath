@@ -3,8 +3,10 @@ import { useState } from 'react'
 import { Link, Navigate } from 'react-router'
 import { reasonText } from '@wellpath/engine'
 import { AppShell, Notice } from '../components/app/AppShell'
+import { DayTabs } from '../components/app/DayTabs'
 import { MealCard } from '../components/app/MealCard'
-import { dayDate, todayIndex, useMealPlan } from '../lib/meals'
+import { useMealPlan } from '../lib/meals'
+import { dayDate, todayIndex } from '../lib/week'
 
 export function Meals() {
   const { state, retry, replace } = useMealPlan()
@@ -37,22 +39,7 @@ export function Meals() {
               <span className="font-semibold text-heading">{plan.target.proteinG} g protein</span> a day.
             </p>
 
-            <div className="mt-6 grid grid-cols-7 gap-1.5 sm:gap-2" role="tablist" aria-label="Day of the week">
-              {plan.days.map((d) => {
-                const date = dayDate(weekStart, d.day)
-                const active = d.day === day
-                return (
-                  <button
-                    key={d.day} type="button" role="tab" aria-selected={active} onClick={() => setPicked(d.day)}
-                    className={`rounded-xl border px-1 py-2 text-center transition ${active ? 'border-violet bg-white shadow-sm' : 'border-line bg-white/60 hover:bg-white'}`}
-                  >
-                    <span className={`block text-xs font-semibold ${active ? 'text-violet' : 'text-muted'}`}>{date.toLocaleDateString('en-GB', { weekday: 'short' })}</span>
-                    <span className="block text-lg font-bold text-heading">{date.getDate()}</span>
-                    {d.day === todayIndex() && <span className="block text-[10px] font-semibold uppercase text-mint">Today</span>}
-                  </button>
-                )
-              })}
-            </div>
+            <div className="mt-6"><DayTabs weekStart={weekStart} value={day} onChange={setPicked} /></div>
 
             <div className="mt-6 flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-xl font-bold text-heading">{dayDate(weekStart, day).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
