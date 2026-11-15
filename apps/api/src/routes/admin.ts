@@ -8,13 +8,13 @@
  *   POST   /foods/:slug/verify    mark a food's values as checked
  *   DELETE /foods/:slug           delete a food (refused while other foods are variants of it)
  *   ...the same for /exercises, without verify
- *   GET    /safety-rules          the condition rules from the engine, with their effect on the library
+ *   GET    /safety-rules          the condition rules from the engine (exercises and foods), with their effect on the library
  *   GET    /audit                 audit log, newest first (?before=<id> for the next page)
  */
 import { Router } from "express";
 import { isValidObjectId, mongo, type Model } from "mongoose";
 import type { z } from "zod";
-import { CONDITION_BLOCKS, conditionNotices, isExerciseSafe } from "@wellpath/engine";
+import { CONDITION_BLOCKS, CONDITION_FOOD_RULES, conditionNotices, isExerciseSafe, isFoodAllowed, isFoodLimited } from "@wellpath/engine";
 import { CONDITIONS, EXERCISE_TYPES, type Exercise, type Food, exerciseSchema, foodSchema } from "@wellpath/shared";
 import { HttpError } from "../middleware/errors.js";
 import { requireAdmin } from "../middleware/requireAdmin.js";
@@ -155,6 +155,8 @@ adminRouter.post("/foods/:slug/verify", async (req, res) => {
 /** The engine's rules, read-only, with how they affect the current exercise library and users. */
 adminRouter.get("/safety-rules", async (_req, res) => {
   const exercises = await ExerciseModel.find({}, { slug: 1, name: 1, type: 1, level: 1, loads: 1 }).sort({ name: 1 }).lean();
+  const foods = await FoodModel.find({}, { _id: 0, slug: 1, name: 1, tags: 1 }).sort({ name: 1 }).lean<Pick<Food, "slug" | "name" | "tags">[]>();
+  const pick = (list: typeof foods) => list.map((f) => ({ slug: f.slug, name: f.name }));
   const rules = await Promise.all(
     CONDITIONS.map(async (condition) => {
       const safe = exercises.filter((e) => isExerciseSafe(e, [condition]));
@@ -167,6 +169,10 @@ adminRouter.get("/safety-rules", async (_req, res) => {
         notice: conditionNotices([condition])[0],
         blockedExercises: exercises.filter((e) => !isExerciseSafe(e, [condition])).map((e) => ({ slug: e.slug, name: e.name })),
         beginnerLeft,
+        avoidTags: CONDITION_FOOD_RULES[condition].avoid,
+        limitTags: CONDITION_FOOD_RULES[condition].limit,
+        blockedFoods: pick(foods.filter((f) => !isFoodAllowed(f, [condition]))),
+        limitedFoods: pick(foods.filter((f) => isFoodAllowed(f, [condition]) && isFoodLimited(f, [condition]))),
         usersAffected: await User.countDocuments({ "profile.conditions": condition }),
       };
     }),

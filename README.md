@@ -77,6 +77,9 @@ Before deploying: browsers such as Safari block cookies from another site, which
 | --- | --- | --- |
 | GET | `/health` | API is alive |
 | POST | `/api/v1/plan/preview` | Daily calorie and macro targets from a profile |
+| GET | `/api/v1/plan/meals` | This week's 7-day meal plan from the saved profile (signed in; `?week=<Monday>`). Same week, same plan |
+| GET | `/api/v1/plan/meals/alternatives` | Up to 3 other plates for one meal (`?week`, `day=0-6`, `slot`), same diet, safety rules and calories |
+| PUT, DELETE | `/api/v1/plan/meals/swap` | Swap one meal for an offered alternative, or put it back. Cleared when the profile changes |
 | POST | `/api/v1/auth/register` | Create an account and start a session |
 | POST | `/api/v1/auth/login` | Sign in and start a session |
 | POST | `/api/v1/auth/refresh` | Swap the refresh cookie for a new access token |
