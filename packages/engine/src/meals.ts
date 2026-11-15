@@ -16,6 +16,7 @@
 import { DEFAULT_ROLE, type Condition, type DietType, type Food, type MealRole, type MealSlot, type Nutrients } from "@wellpath/shared";
 import { nutrientsForPortion, sumNutrients } from "./nutrition";
 import { conditionsWithFoodRules, isFoodAllowed, isFoodLimited } from "./safety";
+import { jitter } from "./seeded";
 
 /** Which food diet categories each diet may eat. "vegetarian" here includes dairy. */
 const DIET_ALLOWS: Record<DietType, readonly DietType[]> = {
@@ -129,19 +130,6 @@ export type MealPlanInput = {
 };
 
 /* ---------- small helpers ---------- */
-
-/** FNV-1a: a fast, stable string hash, the same on every machine. */
-function hash(text: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
-
-/** A stable number from 0 to 1 for this food on this day, used to break ties between good options. */
-const jitter = (seed: string, day: number, slug: string) => hash(`${seed}|${day}|${slug}`) / 0xffffffff;
 
 /** Leading count in a portion label: "2 eggs" -> 2, "2-egg omelette" -> 2, "1 katori" -> 1, "Handful" -> 1. */
 const labelCount = (label: string) => Number(/^(\d+)[\s-]/.exec(label)?.[1] ?? 1);

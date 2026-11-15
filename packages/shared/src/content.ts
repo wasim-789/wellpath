@@ -177,5 +177,6 @@ export type Food = z.infer<typeof foodSchema>;
 export type ExerciseType = (typeof EXERCISE_TYPES)[number];
 export type ExerciseLevel = (typeof EXERCISE_LEVELS)[number];
 export type Equipment = (typeof EQUIPMENT)[number];
+export type MuscleGroup = (typeof MUSCLE_GROUPS)[number];
 export type ExerciseLoad = (typeof EXERCISE_LOADS)[number];
 export type Exercise = z.infer<typeof exerciseSchema>;

@@ -15,6 +15,12 @@ export const CONDITION_BLOCKS: Record<Condition, readonly ExerciseLoad[]> = {
   diabetes: [],
 };
 
+/**
+ * Loads left out during pregnancy or breastfeeding, on top of any condition rules: no jumping,
+ * very hard efforts, back arching or long breath-holding holds. Pregnancy also keeps workouts at beginner level.
+ */
+export const PREGNANCY_BLOCKS: readonly ExerciseLoad[] = ["jumping", "high_intensity", "spine_loading", "breath_holding"];
+
 /** Every load blocked by at least one of the user's conditions. */
 export function blockedLoads(conditions: readonly Condition[]): Set<ExerciseLoad> {
   return new Set(conditions.flatMap((c) => CONDITION_BLOCKS[c]));

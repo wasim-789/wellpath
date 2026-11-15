@@ -152,3 +152,4 @@ export type { Goal };
 export * from "./nutrition";
 export * from "./safety";
 export * from "./meals";
+export * from "./workouts";
