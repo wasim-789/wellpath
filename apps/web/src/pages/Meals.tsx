@@ -1,23 +1,25 @@
 /** This week's meals, one day at a time, with the reasons behind each choice. */
 import { useState } from 'react'
-import { Link, Navigate } from 'react-router'
+import { Link, Navigate, useSearchParams } from 'react-router'
 import { reasonText } from '@wellpath/engine'
 import { AppShell, Notice } from '../components/app/AppShell'
 import { DayTabs } from '../components/app/DayTabs'
 import { MealCard } from '../components/app/MealCard'
+import { StartOver } from '../components/app/StartOver'
 import { useMealPlan } from '../lib/meals'
-import { dayDate, todayIndex } from '../lib/week'
+import { dayDate, dayFromQuery } from '../lib/week'
 
 export function Meals() {
   const { state, retry, replace } = useMealPlan()
   const [picked, setPicked] = useState<number | null>(null)
-  const day = picked ?? todayIndex()
+  const [params] = useSearchParams()
+  const day = picked ?? dayFromQuery(params.get('day'))
 
   if (state.status === 'error' && /onboarding/i.test(state.message)) return <Navigate to="/onboarding" replace />
 
   return (
     <AppShell>
-      <Link to="/app" className="text-sm font-semibold text-violet hover:underline">← Home</Link>
+      <Link to="/week" className="text-sm font-semibold text-violet hover:underline">← Your week</Link>
       <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-heading">Your meals this week</h1>
 
       {state.status === 'loading' && <p className="mt-8 text-sm text-muted" role="status">Planning your meals…</p>}
@@ -57,8 +59,9 @@ export function Meals() {
               {current.meals.map((m) => <MealCard key={`${day}-${m.slot}`} meal={m} swap={{ weekStart, day, onPlan: replace }} />)}
             </div>
 
-            <div className="mt-8">
+            <div className="mt-8 space-y-4">
               <Notice tone="blue" title="How this plan was made" items={plan.reasons.map(reasonText)} />
+              <StartOver weekStart={weekStart} part="meals" onPlan={replace} />
             </div>
           </>
         )

@@ -48,3 +48,13 @@ export function dayDate(weekStart: string, day: number) {
   d.setDate(d.getDate() + day)
   return d
 }
+
+/** Start this week's meals or workouts over. Returns that part of the new plan. */
+export const rebuildWeek = <T>(week: string, part: 'meals' | 'workouts') =>
+  api<Weekly<T>>('/api/v1/plan/rebuild', { method: 'POST', body: JSON.stringify({ week, part }) })
+
+/** The day to show first: ?day=0-6 from a link, or today. */
+export function dayFromQuery(value: string | null) {
+  const n = Number(value)
+  return value !== null && Number.isInteger(n) && n >= 0 && n <= 6 ? n : todayIndex()
+}

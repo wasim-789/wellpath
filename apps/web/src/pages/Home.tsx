@@ -97,6 +97,7 @@ export function Home() {
         <>
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
             <p className="text-muted">Goal: <span className="font-semibold text-heading">{labelOf(GOAL_OPTIONS, state.data.profile.goal)}</span></p>
+            <Link to="/week" className="text-sm font-semibold text-violet hover:underline">See your whole week</Link>
             <Link to="/onboarding" className="text-sm font-semibold text-violet hover:underline">Edit my answers</Link>
           </div>
           <div className="mt-8 grid gap-6 lg:grid-cols-[1.2fr_1fr]">

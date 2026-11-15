@@ -12,6 +12,7 @@ import { Onboarding } from './pages/Onboarding.tsx'
 import { Settings } from './pages/Settings.tsx'
 import { Meals } from './pages/Meals.tsx'
 import { Workouts } from './pages/Workouts.tsx'
+import { Week } from './pages/Week.tsx'
 import { Toaster } from './components/Toaster.tsx'
 import { restoreSession, useAuth, wasSignedOutOnPurpose } from './lib/auth.ts'
 
@@ -40,6 +41,7 @@ const router = createBrowserRouter([
   { path: '/onboarding', element: <RequireUser><Onboarding /></RequireUser> },
   { path: '/meals', element: <RequireUser><Meals /></RequireUser> },
   { path: '/workouts', element: <RequireUser><Workouts /></RequireUser> },
+  { path: '/week', element: <RequireUser><Week /></RequireUser> },
   { path: '/settings', element: <RequireUser><Settings /></RequireUser> },
   { path: '*', element: <Navigate to="/" replace /> },
 ])
