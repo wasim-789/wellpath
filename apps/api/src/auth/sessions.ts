@@ -45,7 +45,10 @@ export async function rotateSession(token: string, client: SessionClient) {
   };
 }
 
-export async function endSession(token: string, client: SessionClient): Promise<void> {
+/** Ends the session's whole family. Returns whose session it was, or null for an unknown token. */
+export async function endSession(token: string, client: SessionClient): Promise<Types.ObjectId | null> {
   const session = await Session.findOne({ tokenHash: hashToken(token), client });
-  if (session) await revokeFamily(session.familyId);
+  if (!session) return null;
+  await revokeFamily(session.familyId);
+  return session.userId;
 }

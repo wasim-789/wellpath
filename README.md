@@ -11,7 +11,7 @@ AI powered personalized health and lifestyle planner. A rule engine builds every
 | `apps/api` | Backend API (Node, Express, TypeScript, MongoDB) | http://localhost:4000 |
 | `apps/web` | User web app (React, Vite, TypeScript) | http://localhost:5173 |
 | `apps/admin` | Admin panel (React, Vite, TypeScript) | http://localhost:5174 |
-| `packages/engine` | Plan engine: BMR, TDEE, calorie and macro targets (pure functions + tests) | imported by api |
+| `packages/engine` | Plan engine: calorie and macro targets, safety rules, meal and workout planners (pure functions + tests) | imported by api |
 | `packages/shared` | Zod schemas and types shared by all apps | imported everywhere |
 
 ## Run locally
@@ -29,6 +29,15 @@ npm run dev:admin                  # terminal 3 (optional)
 Open http://localhost:5173 for the web app. The admin dashboard at http://localhost:5174 shows whether the API is online.
 
 Run `npm run doctor` to check `apps/api/.env` and the MongoDB connection.
+
+### Starter foods and exercises
+
+```bash
+npm run seed            # adds missing starter foods and exercises (safe to run any time)
+npm run seed -- --force # resets seeded items to the code version (loses admin edits)
+```
+
+Every starter food is marked unverified. Its source note says where the numbers came from, and someone should check it before marking it verified.
 
 ### Email (password reset)
 
@@ -68,6 +77,13 @@ Before deploying: browsers such as Safari block cookies from another site, which
 | --- | --- | --- |
 | GET | `/health` | API is alive |
 | POST | `/api/v1/plan/preview` | Daily calorie and macro targets from a profile |
+| GET | `/api/v1/plan/meals` | This week's 7-day meal plan (signed in; `?week=<Monday>`). Saved, so it stays the same all week |
+| GET | `/api/v1/plan/meals/alternatives` | Up to 3 other plates for one meal (`?week`, `day=0-6`, `slot`), same diet, safety rules and calories |
+| PUT, DELETE | `/api/v1/plan/meals/swap` | Swap one meal for an offered alternative, or put it back |
+| GET | `/api/v1/plan/workouts` | This week's home workouts (3 to 5 days, fits your minutes, level and safety rules; `?week=<Monday>`) |
+| GET | `/api/v1/plan/workouts/alternatives` | Up to 3 safe exercises for the same muscles (`?week`, `day`, `slug`) |
+| PUT, DELETE | `/api/v1/plan/workouts/swap` | Swap one exercise for an offered alternative, or put it back |
+| POST | `/api/v1/plan/rebuild` | New meals or new workouts for the week (`{ week, part }`) |
 | POST | `/api/v1/auth/register` | Create an account and start a session |
 | POST | `/api/v1/auth/login` | Sign in and start a session |
 | POST | `/api/v1/auth/refresh` | Swap the refresh cookie for a new access token |
@@ -82,6 +98,17 @@ Before deploying: browsers such as Safari block cookies from another site, which
 | POST | `/api/v1/admin/auth/refresh` | Swap the admin refresh cookie for a new access token |
 | POST | `/api/v1/admin/auth/logout` | End the admin session |
 | GET | `/api/v1/admin/auth/me` | Current admin |
+| GET, POST | `/api/v1/admin/foods` | List or add foods (admins only, like every `/admin` route) |
+| PUT, DELETE | `/api/v1/admin/foods/:slug` | Edit or delete a food (the slug never changes) |
+| POST | `/api/v1/admin/foods/:slug/verify` | Mark a food's values as checked |
+| GET, POST | `/api/v1/admin/exercises` | List or add exercises |
+| PUT, DELETE | `/api/v1/admin/exercises/:slug` | Edit or delete an exercise |
+| GET | `/api/v1/admin/safety-rules` | The engine's condition rules and which exercises they leave out (read-only) |
+| GET | `/api/v1/admin/audit` | Admin sign-ins and content changes, newest first (`?before=<id>` for older) |
+
+### How weekly plans are saved
+
+Each week's meals and workouts are built the first time the week is opened and saved, so they stay the same all week. A plan is rebuilt when the user changes their answers, asks for new meals or workouts, or when a food or exercise in it is deleted or becomes unsafe for them. Weeks that are over are kept exactly as they were.
 
 ## Tech stack
 

@@ -1,8 +1,10 @@
 /** Removing an account and everything stored about it. */
 import type { Types } from "mongoose";
+import { AuditLog } from "../models/AuditLog.js";
 import { PasswordReset } from "../models/PasswordReset.js";
 import { Session } from "../models/Session.js";
 import { User } from "../models/User.js";
+import { WeekPlan } from "../models/WeekPlan.js";
 
 /**
  * Deletes the user and all of their data.
@@ -11,6 +13,9 @@ import { User } from "../models/User.js";
 export async function deleteUserData(userId: Types.ObjectId): Promise<void> {
   await Session.deleteMany({ userId });
   await PasswordReset.deleteMany({ userId });
+  await WeekPlan.deleteMany({ userId });
+  // An admin's past actions stay in the audit log for accountability, but no longer name them.
+  await AuditLog.updateMany({ actorId: userId }, { $set: { actorEmail: "Deleted account" }, $unset: { actorId: 1 } });
   await User.deleteOne({ _id: userId });
 }
 

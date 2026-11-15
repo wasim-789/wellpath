@@ -12,7 +12,8 @@
     "doctor": "tsx scripts/doctor.ts",
     "make-admin": "tsx scripts/make-admin.ts",
     "test-email": "tsx scripts/test-email.ts",
-    "email-icons": "tsx scripts/build-email-icons.ts"
+    "email-icons": "tsx scripts/build-email-icons.ts",
+    "seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
     "@wellpath/engine": "*",

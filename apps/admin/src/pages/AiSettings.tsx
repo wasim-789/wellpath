@@ -19,7 +19,7 @@ export function AiSettings() {
     ;[order[i], order[j]] = [order[j], order[i]]
     setAi({ ...ai, fallbackOrder: order })
   }
-  const save = () => { setState(() => ({ ai }), { action: 'Updated AI settings', target: `limit ${ai.dailyLimitPerUser}, primary ${PROVIDER_LABEL[ai.fallbackOrder[0]]}` }); toast('AI settings saved') }
+  const save = () => { setState(() => ({ ai })); toast('AI settings saved') }
 
   const totals = aiUsage.reduce((a, d) => ({ gemini: a.gemini + d.gemini, groq: a.groq + d.groq, cached: a.cached + d.cached, errors: a.errors + d.errors }), { gemini: 0, groq: 0, cached: 0, errors: 0 })
   const all = totals.gemini + totals.groq + totals.cached

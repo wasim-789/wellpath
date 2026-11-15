@@ -4,13 +4,16 @@
  * so the browser and the server always agree on what valid data looks like.
  */
 import { z } from "zod";
+import { DIET_TYPES } from "./content";
+
+// Food and exercise content. content.ts must not import from this file (that would be a circular import).
+export * from "./content";
 
 export const GOALS = ["lose_weight", "gain_weight", "maintain", "general_fitness"] as const;
 export const ACTIVITY_LEVELS = ["sedentary", "light", "moderate", "active", "very_active"] as const;
 export const SEXES = ["male", "female"] as const;
 
 export const CONDITIONS = ["knee_pain", "lower_back_pain", "shoulder_injury", "high_blood_pressure", "diabetes"] as const;
-export const DIET_TYPES = ["non_vegetarian", "eggetarian", "vegetarian"] as const;
 export const WORKOUT_MINUTES = [10, 20, 30, 45, 60] as const;
 
 /** Below this BMI, WellPath never sets a weight-loss target. */
