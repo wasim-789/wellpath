@@ -7,7 +7,6 @@ import { calculateDailyTargets, conditionNotices } from "@wellpath/engine";
 import { onboardingSchema } from "@wellpath/shared";
 import { HttpError } from "../middleware/errors.js";
 import { requireAuth } from "../middleware/requireAuth.js";
-import { MealSwap } from "../models/MealSwap.js";
 import { User, type UserDocument, toSavedProfile } from "../models/User.js";
 
 export const profileRouter = Router();
@@ -37,7 +36,5 @@ profileRouter.put("/", async (req, res) => {
   const user = await activeUser(req);
   user.profile = { ...answers, consentedAt: user.profile?.consentedAt ?? new Date() };
   await user.save();
-  // New answers mean a new plan: swapped meals were picked for the old targets and diet.
-  await MealSwap.deleteMany({ userId: user._id });
   sendProfile(res, user);
 });

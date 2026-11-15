@@ -9,9 +9,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { calculateDailyTargets, dietAllows, isFoodAllowed, planMeals } from "@wellpath/engine";
 import { CONDITIONS, DIET_TYPES, type Condition, type DietType, type Profile } from "@wellpath/shared";
 import { createApp } from "../src/app.js";
-import { weekStart } from "../src/routes/plan.js";
+import { weekFromNow, weekStart } from "../src/routes/plan.js";
 import { FoodModel } from "../src/models/Food.js";
-import { MealSwap } from "../src/models/MealSwap.js";
+import { WeekPlan } from "../src/models/WeekPlan.js";
 import { Session } from "../src/models/Session.js";
 import { User } from "../src/models/User.js";
 import { seedContent } from "../src/seed/index.js";
@@ -98,10 +98,10 @@ describe("GET /api/v1/plan/meals", () => {
   beforeAll(async () => {
     db = await MongoMemoryServer.create();
     await mongoose.connect(db.getUri());
-    await Promise.all([User.init(), Session.init(), FoodModel.init(), MealSwap.init()]);
+    await Promise.all([User.init(), Session.init(), FoodModel.init(), WeekPlan.init()]);
   });
   beforeEach(async () => {
-    await Promise.all([User.deleteMany({}), Session.deleteMany({}), FoodModel.deleteMany({}), MealSwap.deleteMany({})]);
+    await Promise.all([User.deleteMany({}), Session.deleteMany({}), FoodModel.deleteMany({}), WeekPlan.deleteMany({})]);
     await seedContent();
   });
   afterAll(async () => {
@@ -139,24 +139,26 @@ describe("GET /api/v1/plan/meals", () => {
     await request(app).put("/api/v1/profile").set("Authorization", auth).send(answers);
     const get = (query = "", who = auth) => request(app).get(`${MEALS}${query}`).set("Authorization", who);
 
-    const a = await get("?week=2026-11-16");
-    expect((await get("?week=2026-11-16")).body).toEqual(a.body);
-    expect((await get("?week=2026-11-23")).body.plan.days).not.toEqual(a.body.plan.days);
+    const [next, after] = [weekFromNow(1), weekFromNow(2)];
+    const a = await get(`?week=${next}`);
+    expect((await get(`?week=${next}`)).body).toEqual(a.body);
+    expect((await get(`?week=${after}`)).body.plan.days).not.toEqual(a.body.plan.days);
 
     const other = await signUp("ali@example.com");
     await request(app).put("/api/v1/profile").set("Authorization", other).send(answers);
-    expect((await get("?week=2026-11-16", other)).body.plan.days).not.toEqual(a.body.plan.days);
+    expect((await get(`?week=${next}`, other)).body.plan.days).not.toEqual(a.body.plan.days);
   });
 
-  it("refuses a week that is not a Monday date", async () => {
+  it("refuses a week that is not a Monday date, or is too far away", async () => {
     const auth = await signUp();
     await request(app).put("/api/v1/profile").set("Authorization", auth).send(answers);
-    for (const week of ["2026-11-17", "next", "2026-13-01"]) {
+    const tuesday = new Date(Date.parse(weekFromNow(1)) + 86_400_000).toISOString().slice(0, 10);
+    for (const week of [tuesday, "next", "2026-13-01", weekFromNow(5), weekFromNow(-53)]) {
       expect((await request(app).get(`${MEALS}?week=${week}`).set("Authorization", auth)).status, week).toBe(400);
     }
   });
 
-  it("uses admin edits straight away", async () => {
+  it("rebuilds a saved plan when a food in it is deleted", async () => {
     const auth = await signUp();
     await request(app).put("/api/v1/profile").set("Authorization", auth).send(answers);
     await FoodModel.deleteMany({ slug: { $in: ["daal-masoor", "daal-chana", "daal-mash"] } });
@@ -166,7 +168,7 @@ describe("GET /api/v1/plan/meals", () => {
   });
 
   describe("swapping a meal", () => {
-    const WEEK = "2026-11-16";
+    const WEEK = weekFromNow(1);
     const at = { day: 6, slot: "lunch" } as const;
     type Meal = { slot: string; swapped?: boolean; items: { slug: string; portionIndex: number; quantity: number }[] };
     const lunch = (body: { plan: { days: { meals: Meal[] }[] } }) => body.plan.days[at.day].meals.find((m) => m.slot === at.slot)!;
@@ -197,7 +199,7 @@ describe("GET /api/v1/plan/meals", () => {
       const back = await request(app).delete(`${MEALS}/swap?week=${WEEK}&day=${at.day}&slot=${at.slot}`).set("Authorization", auth);
       expect(back.status).toBe(200);
       expect(lunch(back.body)).toEqual(original);
-      expect(await MealSwap.countDocuments()).toBe(0);
+      expect(lunch((await get(auth)).body)).toEqual(original);
     });
 
     it("only saves a plate the planner offered", async () => {
@@ -205,7 +207,7 @@ describe("GET /api/v1/plan/meals", () => {
       // Chicken karahi is not vegetarian, so the planner would never offer it to this user.
       const res = await put(auth, [{ slug: "chicken-karahi", portionIndex: 0, quantity: 1 }, { slug: "roti", portionIndex: 0, quantity: 2 }]);
       expect(res.status).toBe(409);
-      expect(await MealSwap.countDocuments()).toBe(0);
+      expect(lunch((await get(auth)).body).swapped).toBeUndefined();
     });
 
     it("refuses a bad day, meal or item list", async () => {
@@ -217,18 +219,14 @@ describe("GET /api/v1/plan/meals", () => {
       expect((await request(app).put(`${MEALS}/swap`).set("Authorization", auth).send({ week: WEEK, day: 9, slot: "lunch", items: choice(options[0]) })).status).toBe(400);
     });
 
-    it("clears swaps when the answers change, and with the account", async () => {
+    it("starts over when the answers change, and is deleted with the account", async () => {
       const { auth, options } = await ready();
       await put(auth, choice(options[0]));
       await request(app).put("/api/v1/profile").set("Authorization", auth).send({ ...answers, weightKg: 66 });
       expect(lunch((await get(auth)).body).swapped).toBeUndefined();
-      expect(await MealSwap.countDocuments()).toBe(0);
-
-      const again = await request(app).get(`${MEALS}/alternatives?week=${WEEK}&day=${at.day}&slot=${at.slot}`).set("Authorization", auth);
-      await put(auth, choice(again.body.options[0]));
-      expect(await MealSwap.countDocuments()).toBe(1);
+      expect(await WeekPlan.countDocuments()).toBe(1);
       expect((await request(app).delete("/api/v1/auth/account").set("Authorization", auth).send({ password: "long-enough-pw" })).status).toBe(204);
-      expect(await MealSwap.countDocuments()).toBe(0);
+      expect(await WeekPlan.countDocuments()).toBe(0);
     });
   });
 });

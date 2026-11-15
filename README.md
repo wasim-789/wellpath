@@ -77,10 +77,13 @@ Before deploying: browsers such as Safari block cookies from another site, which
 | --- | --- | --- |
 | GET | `/health` | API is alive |
 | POST | `/api/v1/plan/preview` | Daily calorie and macro targets from a profile |
-| GET | `/api/v1/plan/meals` | This week's 7-day meal plan from the saved profile (signed in; `?week=<Monday>`). Same week, same plan |
+| GET | `/api/v1/plan/meals` | This week's 7-day meal plan (signed in; `?week=<Monday>`). Saved, so it stays the same all week |
 | GET | `/api/v1/plan/meals/alternatives` | Up to 3 other plates for one meal (`?week`, `day=0-6`, `slot`), same diet, safety rules and calories |
-| PUT, DELETE | `/api/v1/plan/meals/swap` | Swap one meal for an offered alternative, or put it back. Cleared when the profile changes |
+| PUT, DELETE | `/api/v1/plan/meals/swap` | Swap one meal for an offered alternative, or put it back |
 | GET | `/api/v1/plan/workouts` | This week's home workouts (3 to 5 days, fits your minutes, level and safety rules; `?week=<Monday>`) |
+| GET | `/api/v1/plan/workouts/alternatives` | Up to 3 safe exercises for the same muscles (`?week`, `day`, `slug`) |
+| PUT, DELETE | `/api/v1/plan/workouts/swap` | Swap one exercise for an offered alternative, or put it back |
+| POST | `/api/v1/plan/rebuild` | New meals or new workouts for the week (`{ week, part }`) |
 | POST | `/api/v1/auth/register` | Create an account and start a session |
 | POST | `/api/v1/auth/login` | Sign in and start a session |
 | POST | `/api/v1/auth/refresh` | Swap the refresh cookie for a new access token |
@@ -102,6 +105,10 @@ Before deploying: browsers such as Safari block cookies from another site, which
 | PUT, DELETE | `/api/v1/admin/exercises/:slug` | Edit or delete an exercise |
 | GET | `/api/v1/admin/safety-rules` | The engine's condition rules and which exercises they leave out (read-only) |
 | GET | `/api/v1/admin/audit` | Admin sign-ins and content changes, newest first (`?before=<id>` for older) |
+
+### How weekly plans are saved
+
+Each week's meals and workouts are built the first time the week is opened and saved, so they stay the same all week. A plan is rebuilt when the user changes their answers, asks for new meals or workouts, or when a food or exercise in it is deleted or becomes unsafe for them. Weeks that are over are kept exactly as they were.
 
 ## Tech stack
 
