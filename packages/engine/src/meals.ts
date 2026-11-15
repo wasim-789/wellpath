@@ -9,7 +9,7 @@
  *
  * Condition food rules (see safety.ts) take out sugary foods for diabetes and very salty ones for high
  * blood pressure, and make white rice and naan rare for diabetes. People can swap any meal for one of
- * a few alternatives (mealAlternatives); saved swaps are put back in on every rebuild.
+ * a few alternatives (mealAlternatives, replaceMeal); the planned meal is kept so it can be put back.
  *
  * Reasons are codes with numbers, not sentences, so the apps can translate them (see reasonText).
  */
@@ -104,11 +104,12 @@ export type PlannedMeal = {
   reasons: Reason[];
   /** True when the person swapped this meal for one of the alternatives. */
   swapped?: boolean;
+  /** The meal the planner chose, kept while a swap is in place so it can be put back. */
+  original?: PlannedMeal;
 };
 
-/** A meal as stored when someone swaps it: which foods, which portion, how many. */
+/** Which foods, which portion and how many: what makes two plates the same. */
 export type MealChoice = { slug: string; portionIndex: number; quantity: number }[];
-export type MealSwap = { day: number; slot: MealSlot; items: MealChoice };
 export type PlannedDay = { day: number; meals: PlannedMeal[]; totals: Nutrients; reasons: Reason[] };
 export type MealPlan = {
   dietType: DietType;
@@ -125,8 +126,6 @@ export type MealPlanInput = {
   /** Any text. Use the user id plus the week, so each week differs but reloads do not. */
   seed: string;
   days?: number;
-  /** Meals the person swapped. Ones that no longer fit (food deleted, diet changed) are ignored. */
-  swaps?: readonly MealSwap[];
 };
 
 /* ---------- small helpers ---------- */
@@ -367,7 +366,7 @@ function prepare({ targets, dietType, conditions = [], foods }: MealPlanInput): 
 
 const isTreatSnack = (prep: Prepared, day: number, slot: MealSlot) => slot === "snack" && prep.treatsAllowed && day === TREAT_DAY;
 
-/** The week as the planner picks it, before any swaps. */
+/** The week, day by day and meal by meal. */
 function planWeek(input: MealPlanInput, prep: Prepared): PlannedDay[] {
   const { targets, seed, days = 7 } = input;
   const history: History = { usedToday: new Set(), bySlot: new Map(), weekCount: new Map() };
@@ -408,40 +407,10 @@ function planWeek(input: MealPlanInput, prep: Prepared): PlannedDay[] {
 
 const DAY_ORDER = ["breakfast", "lunch", "snack", "dinner"] as const;
 
-/**
- * The options a saved swap stands for, or null when it no longer fits: the food was deleted, the diet
- * or conditions changed, or the portion is gone. A swap that no longer fits is ignored, never forced.
- */
-function swapOptions(swap: MealSwap, prep: Prepared): Option[] | null {
-  if (!swap.items.length) return null;
-  const options: Option[] = [];
-  for (const item of swap.items) {
-    const food = prep.allowed.find((f) => f.slug === item.slug);
-    if (!food || !food.mealSlots.includes(swap.slot)) return null;
-    if (food.treat && !isTreatSnack(prep, swap.day, swap.slot)) return null;
-    const portion = food.portions[item.portionIndex];
-    const role = mealRole(food);
-    if (!portion || !quantityOptions(role, portion).includes(item.quantity)) return null;
-    if (options.some((o) => o.food === food)) return null;
-    options.push({ food, role, portionIndex: item.portionIndex, quantity: item.quantity, nutrients: nutrientsForPortion(food, item.portionIndex, item.quantity) });
-  }
-  return options;
-}
-
-/** The plan with the person's own swaps put in. Meals they did not swap stay exactly as planned. */
+/** The week's plan as the planner picks it. */
 function buildPlan(input: MealPlanInput, prep: Prepared): MealPlan {
-  const { targets, dietType, conditions = [], swaps = [] } = input;
+  const { targets, dietType, conditions = [] } = input;
   const days = planWeek(input, prep);
-
-  for (const swap of swaps) {
-    const day = days[swap.day];
-    const index = day?.meals.findIndex((m) => m.slot === swap.slot) ?? -1;
-    const chosen = index >= 0 ? swapOptions(swap, prep) : null;
-    if (!chosen) continue;
-    const meals = [...day.meals];
-    meals[index] = { ...makeMeal(swap.slot, chosen, meals[index].target, [{ code: "swapped" }]), swapped: true };
-    days[swap.day] = makeDay(swap.day, meals, targets);
-  }
 
   const reasons: Reason[] = [{ code: "diet_filter", params: { diet: dietType } }];
   for (const condition of conditionsWithFoodRules(conditions)) reasons.push({ code: "condition_foods", params: { condition } });
@@ -457,7 +426,24 @@ export function planMeals(input: MealPlanInput): MealPlan {
   return buildPlan(input, prepare(input));
 }
 
-/** How a meal is stored as a swap, and compared: the same foods, portions and amounts. */
+/**
+ * True while every food in a saved plan still exists and is still allowed for this diet and these
+ * conditions. When an admin deletes a food or tags it as unsafe, the saved plan must be rebuilt.
+ */
+export function mealPlanFits(plan: MealPlan, input: MealPlanInput): boolean {
+  const prep = prepare(input);
+  const bySlug = new Map(prep.allowed.map((f) => [f.slug, f]));
+  return plan.days.every((d) =>
+    d.meals.every((m) =>
+      [...m.items, ...(m.original?.items ?? [])].every((i) => {
+        const food = bySlug.get(i.slug);
+        return !!food && food.mealSlots.includes(m.slot) && (!food.treat || prep.treatsAllowed);
+      }),
+    ),
+  );
+}
+
+/** How a meal is compared: the same foods, portions and amounts. */
 export const mealChoice = (meal: Pick<PlannedMeal, "items">): MealChoice =>
   meal.items.map(({ slug, portionIndex, quantity }) => ({ slug, portionIndex, quantity }));
 
@@ -465,6 +451,31 @@ export const sameChoice = (a: MealChoice, b: MealChoice) => {
   const sig = (c: MealChoice) => c.map((i) => `${i.slug}:${i.portionIndex}:${i.quantity}`).sort().join("|");
   return sig(a) === sig(b);
 };
+
+/** The plan with one meal changed and that day's totals worked out again. Other days are untouched. */
+function withMeal(plan: MealPlan, day: number, slot: MealSlot, make: (current: PlannedMeal) => PlannedMeal): MealPlan {
+  const current = plan.days[day]?.meals.find((m) => m.slot === slot);
+  if (!current) throw new RangeError(`The plan has no ${slot} on day ${day}`);
+  const days = [...plan.days];
+  days[day] = makeDay(day, plan.days[day].meals.map((m) => (m.slot === slot ? make(m) : m)), plan.target);
+  return { ...plan, days };
+}
+
+/**
+ * Swap one meal for an alternative. The planned meal is kept as `original`, so it can be put back;
+ * picking a plate that matches the original simply puts it back.
+ */
+export function replaceMeal(plan: MealPlan, day: number, slot: MealSlot, meal: PlannedMeal): MealPlan {
+  return withMeal(plan, day, slot, (current) => {
+    const original = current.original ?? current;
+    if (sameChoice(mealChoice(meal), mealChoice(original))) return original;
+    const [calories, ...rest] = meal.reasons.filter((r) => r.code !== "swapped");
+    return { ...meal, reasons: [calories, { code: "swapped" }, ...rest], swapped: true, original };
+  });
+}
+
+/** Put one swapped meal back to what the planner chose. */
+export const restoreMeal = (plan: MealPlan, day: number, slot: MealSlot): MealPlan => withMeal(plan, day, slot, (current) => current.original ?? current);
 
 /** How far an alternative's calories may stray from what the meal aims for. */
 const ALT_KCAL_SLACK = 0.2;
@@ -474,10 +485,11 @@ const ALT_KCAL_SLACK = 0.2;
  * They aim at the same calories and protein, follow the same diet and condition rules, avoid foods
  * already eaten that day, and each one has a different curry, dish or side from the current meal.
  */
-export function mealAlternatives(input: MealPlanInput & { day: number; slot: MealSlot; count?: number }): PlannedMeal[] {
+export function mealAlternatives(input: MealPlanInput & { day: number; slot: MealSlot; count?: number; plan?: MealPlan }): PlannedMeal[] {
   const { day, slot, count = 3, seed } = input;
   const prep = prepare(input);
-  const plan = buildPlan(input, prep);
+  // The saved plan, which may already have swaps in it, or a fresh one.
+  const plan = input.plan ?? buildPlan(input, prep);
   const current = plan.days[day]?.meals.find((m) => m.slot === slot);
   if (!current) throw new RangeError(`The plan has no ${slot} on day ${day}`);
 

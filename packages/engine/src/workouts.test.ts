@@ -1,7 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { CONDITIONS, type Exercise } from "@wellpath/shared";
 import { CONDITION_BLOCKS, PREGNANCY_BLOCKS } from "./safety";
-import { formatSets, planWorkouts, workoutDaysPerWeek, workoutLevel, workoutReasonText, type WorkoutPlan, type WorkoutReason } from "./workouts";
+import {
+  exerciseAlternatives,
+  formatSets,
+  planWorkouts,
+  replaceExercise,
+  restoreExercise,
+  workoutDaysPerWeek,
+  workoutLevel,
+  workoutPlanFits,
+  workoutReasonText,
+  type WorkoutPlan,
+  type WorkoutReason,
+} from "./workouts";
 
 /** A small library covering every type, level and a few risky loads. */
 const make = (slug: string, e: Partial<Exercise> & Pick<Exercise, "type" | "level" | "muscleGroups">): Exercise => ({
@@ -156,5 +168,52 @@ describe("workoutReasonText", () => {
     const reasons: WorkoutReason[] = [...plan.reasons, ...plan.days.flatMap((d) => [...d.reasons, ...(d.session?.reasons ?? [])])];
     for (const r of reasons) expect(workoutReasonText(r)).toMatch(/\w/);
     expect(workoutReasonText({ code: "workout_days", params: { days: 3, minutes: 30, weekly: 90 } })).toMatch(/^3 workouts a week/);
+  });
+});
+
+describe("swapping an exercise", () => {
+  const plan = planWorkouts(base);
+  const day = plan.days.find((d) => d.session?.focus === "strength")!.day;
+  const session = plan.days[day].session!;
+  const target = session.main.find((e) => e.type === "strength")!;
+  const options = exerciseAlternatives({ ...base, plan, day, slug: target.slug });
+
+  it("offers safe exercises of the same kind, for the same muscles, not already in the session", () => {
+    expect(options.length).toBeGreaterThan(0);
+    const inSession = [...session.warmup, ...session.main, ...session.cooldown].map((e) => e.slug);
+    for (const o of options) {
+      expect(inSession).not.toContain(o.slug);
+      expect(o.type).toBe("strength");
+      expect(o.muscleGroups.some((m) => target.muscleGroups.includes(m))).toBe(true);
+      expect(o.durationSeconds).toBeLessThanOrEqual(target.durationSeconds + 30);
+    }
+    const knee = exerciseAlternatives({ ...base, profile: { ...profile, conditions: ["knee_pain"] }, plan, day, slug: target.slug });
+    for (const o of knee) expect(EXERCISES.find((e) => e.slug === o.slug)!.loads).not.toContain("deep_knee_bend");
+  });
+
+  it("only offers stretches for a cool-down stretch", () => {
+    for (const o of exerciseAlternatives({ ...base, plan, day, slug: session.cooldown[0].slug })) {
+      expect(o.type).toBe("mobility");
+      expect(o.seconds).toBeDefined();
+    }
+  });
+
+  it("swaps one exercise, updates the session time, and can put it back", () => {
+    const after = replaceExercise(plan, day, target.slug, options[0]);
+    const swapped = after.days[day].session!.main.find((e) => e.slug === options[0].slug)!;
+    expect(swapped.swapped).toBe(true);
+    expect(swapped.original).toEqual(target);
+    const all = [...after.days[day].session!.warmup, ...after.days[day].session!.main, ...after.days[day].session!.cooldown];
+    expect(after.days[day].session!.minutes).toBe(Math.round(all.reduce((t, e) => t + e.durationSeconds, 0) / 60));
+    for (const d of after.days) if (d.day !== day) expect(d).toEqual(plan.days[d.day]);
+    expect(restoreExercise(after, day, options[0].slug)).toEqual(plan);
+    expect(replaceExercise(after, day, options[0].slug, target)).toEqual(plan);
+  });
+
+  it("knows when a saved plan is no longer safe or an exercise was deleted", () => {
+    expect(workoutPlanFits(plan, profile, EXERCISES)).toBe(true);
+    expect(workoutPlanFits(plan, profile, EXERCISES.filter((e) => e.slug !== target.slug))).toBe(false);
+    const retagged = EXERCISES.map((e) => (e.slug === target.slug ? { ...e, loads: ["deep_knee_bend" as const] } : e));
+    expect(workoutPlanFits(plan, { ...profile, conditions: ["knee_pain"] }, retagged)).toBe(false);
   });
 });

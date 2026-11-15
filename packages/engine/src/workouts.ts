@@ -112,6 +112,10 @@ export type PlannedExercise = {
   durationSeconds: number;
   kcal: number;
   steps: string[];
+  /** True when the person swapped this exercise for an alternative. */
+  swapped?: boolean;
+  /** The exercise the planner chose, kept while a swap is in place so it can be put back. */
+  original?: PlannedExercise;
 };
 
 export type WorkoutSession = {
@@ -251,19 +255,24 @@ function fill(budget: number, turns: (turn: number) => Exercise[], used: Set<str
 
 /* ---------- the planner ---------- */
 
+/** Safety first: the condition rules, then pregnancy, then level and home equipment. */
+export function usableExercises<T extends Exercise>(profile: WorkoutPlanInput["profile"], exercises: readonly T[]): T[] {
+  const { level } = workoutLevel(profile);
+  return safeExercises(exercises, profile.conditions ?? []).filter(
+    (e) =>
+      levelIndex(e.level) <= levelIndex(level) &&
+      HOME_EQUIPMENT.includes(e.equipment) &&
+      !(profile.pregnantOrBreastfeeding && e.loads.some((l) => PREGNANCY_BLOCKS.includes(l))),
+  );
+}
+
 export function planWorkouts({ profile, exercises, seed }: WorkoutPlanInput): WorkoutPlan {
   const conditions = profile.conditions ?? [];
   const minutes = profile.workoutMinutes;
   const daysPerWeek = workoutDaysPerWeek(profile.activityLevel, minutes);
   const { level, cappedBy } = workoutLevel(profile);
 
-  // Safety first: the condition rules, then pregnancy, then level and home equipment.
-  const usable = safeExercises(exercises, conditions).filter(
-    (e) =>
-      levelIndex(e.level) <= levelIndex(level) &&
-      HOME_EQUIPMENT.includes(e.equipment) &&
-      !(profile.pregnantOrBreastfeeding && e.loads.some((l) => PREGNANCY_BLOCKS.includes(l))),
-  );
+  const usable = usableExercises(profile, exercises);
   const of = (type: ExerciseType) => usable.filter((e) => e.type === type);
   const strength = of("strength");
   const cardio = of("cardio").filter((e) => !isSteady(e));
@@ -363,6 +372,101 @@ export function planWorkouts({ profile, exercises, seed }: WorkoutPlanInput): Wo
 
   return { daysPerWeek, minutesPerSession: minutes, level, days, reasons };
 }
+
+/* ---------- saved plans: checking and swapping ---------- */
+
+const BLOCKS = ["warmup", "main", "cooldown"] as const;
+type Block = (typeof BLOCKS)[number];
+
+const sessionExercises = (s: WorkoutSession) => [...s.warmup, ...s.main, ...s.cooldown];
+
+/**
+ * True while every exercise in a saved plan still exists and is still safe for this person.
+ * When an admin deletes an exercise or tags it as unsafe, the saved plan must be rebuilt.
+ */
+export function workoutPlanFits(plan: WorkoutPlan, profile: WorkoutPlanInput["profile"], exercises: readonly Exercise[]): boolean {
+  const ok = new Set(usableExercises(profile, exercises).map((e) => e.slug));
+  return plan.days.every((d) => !d.session || sessionExercises(d.session).every((e) => ok.has(e.slug) && (!e.original || ok.has(e.original.slug))));
+}
+
+function findExercise(plan: WorkoutPlan, day: number, slug: string): { session: WorkoutSession; block: Block; index: number } {
+  const session = plan.days[day]?.session;
+  if (session) {
+    for (const block of BLOCKS) {
+      const index = session[block].findIndex((e) => e.slug === slug);
+      if (index >= 0) return { session, block, index };
+    }
+  }
+  throw new RangeError(`Day ${day} has no exercise ${slug}`);
+}
+
+/** How much two exercises work the same muscles, from 0 to 1. */
+const overlap = (a: readonly MuscleGroup[], b: readonly MuscleGroup[]) => a.filter((m) => b.includes(m)).length / Math.max(a.length, 1);
+
+/**
+ * Other exercises that could take this one's place: the same kind (warm-up move, stretch, cardio, or a
+ * strength move for the same muscles), safe for this person, not already in the session, and sized to
+ * take about the same time.
+ */
+export function exerciseAlternatives(input: WorkoutPlanInput & { plan: WorkoutPlan; day: number; slug: string; count?: number }): PlannedExercise[] {
+  const { plan, day, slug, profile, seed, count = 3 } = input;
+  const { session, block, index } = findExercise(plan, day, slug);
+  const current = session[block][index];
+  const level = plan.level;
+  const inSession = new Set(sessionExercises(session).flatMap((e) => [e.slug, ...(e.original ? [e.original.slug] : [])]));
+  const currentSteady = (current.seconds ?? 0) >= STEADY_SECONDS && current.type === "cardio";
+
+  const candidates = usableExercises(profile, input.exercises).filter((e) => {
+    if (inSession.has(e.slug)) return false;
+    if (block === "cooldown") return e.type === "mobility" && e.reps === undefined;
+    if (block === "warmup") return current.type === "cardio" ? e.type === "cardio" && e.level === "beginner" && !isSteady(e) : e.type === "mobility" && e.reps !== undefined;
+    if (currentSteady) return e.type === "cardio" && isSteady(e);
+    if (current.type === "cardio") return e.type === "cardio" && !isSteady(e);
+    return e.type === current.type && overlap(current.muscleGroups, e.muscleGroups) > 0;
+  });
+
+  const minSets = block === "main" ? 2 : 1;
+  const sized = candidates.flatMap((e) => {
+    if (isSteady(e)) return [{ exercise: e, sets: 1, seconds: current.seconds }];
+    // As many sets as fit in the time the current exercise takes (plus a little), within the usual range.
+    for (let sets = Math.min(MAX_SETS, Math.max(e.sets, current.sets)); sets >= Math.min(minSets, e.sets); sets--) {
+      if (durationOf({ exercise: e, sets }, level) <= current.durationSeconds + 30) return [{ exercise: e, sets }];
+    }
+    return [];
+  });
+
+  const score = (c: Choice) => -overlap(current.muscleGroups, c.exercise.muscleGroups) + 0.3 * jitter(seed, day, c.exercise.slug) + (levelIndex(c.exercise.level) < levelIndex(level) ? 0.15 : 0);
+  return sized
+    .sort((a, b) => score(a) - score(b))
+    .slice(0, count)
+    .map((c) => toPlanned(c, level, profile.weightKg));
+}
+
+/** The plan with one exercise changed and that session's minutes and calories worked out again. */
+function withExercise(plan: WorkoutPlan, day: number, slug: string, make: (current: PlannedExercise) => PlannedExercise): WorkoutPlan {
+  const { session, block, index } = findExercise(plan, day, slug);
+  const next = { ...session, [block]: session[block].map((e, i) => (i === index ? make(e) : e)) } as WorkoutSession;
+  const all = sessionExercises(next);
+  next.minutes = Math.round(all.reduce((t, e) => t + e.durationSeconds, 0) / 60);
+  next.kcal = all.reduce((t, e) => t + e.kcal, 0);
+  next.reasons = next.reasons.map((r) => (r.code === "session_time" ? { ...r, params: { ...r.params, minutes: next.minutes } } : r));
+  const days = [...plan.days];
+  days[day] = { ...plan.days[day], session: next };
+  return { ...plan, days };
+}
+
+/** Swap one exercise for an alternative, keeping the planned one so it can be put back. */
+export function replaceExercise(plan: WorkoutPlan, day: number, slug: string, replacement: PlannedExercise): WorkoutPlan {
+  return withExercise(plan, day, slug, (current) => {
+    const original = current.original ?? current;
+    if (replacement.slug === original.slug) return original;
+    return { ...replacement, swapped: true, original };
+  });
+}
+
+/** Put one swapped exercise back to what the planner chose. `slug` is the exercise shown now. */
+export const restoreExercise = (plan: WorkoutPlan, day: number, slug: string): WorkoutPlan =>
+  withExercise(plan, day, slug, (current) => current.original ?? current);
 
 /* ---------- English text for reasons (the apps may translate the codes instead) ---------- */
 

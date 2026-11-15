@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Food } from "@wellpath/shared";
-import { dietAllows, formatAmount, mealAlternatives, mealChoice, mealRole, planMeals, reasonText, sameChoice, type Reason } from "./meals";
+import { dietAllows, formatAmount, mealAlternatives, mealChoice, mealPlanFits, mealRole, planMeals, reasonText, replaceMeal, restoreMeal, sameChoice, type Reason } from "./meals";
 
 /** A tiny, hand-checked food list. Values per 100 g. */
 const make = (slug: string, f: Partial<Food> & Pick<Food, "category" | "dietCategory" | "mealSlots">, kcal: number, proteinG: number, portion: Food["portions"][number]): Food => ({
@@ -195,13 +195,14 @@ describe("swapping a meal", () => {
     expect(mealAlternatives({ ...base, ...at }).map((o) => mealChoice(o))).not.toContainEqual(mealChoice(current));
   });
 
-  it("puts a saved swap in and leaves every other meal as it was", () => {
+  it("swaps one meal, keeps the original to put back, and leaves every other meal as it was", () => {
     const before = planMeals(base);
-    const [pick] = mealAlternatives({ ...base, ...at });
-    const after = planMeals({ ...base, swaps: [{ ...at, items: mealChoice(pick) }] });
+    const [pick, second] = mealAlternatives({ ...base, ...at, plan: before });
+    const after = replaceMeal(before, at.day, at.slot, pick);
     expect(sameChoice(mealChoice(lunchOf(after)), mealChoice(pick))).toBe(true);
     expect(lunchOf(after).swapped).toBe(true);
-    expect(lunchOf(after).reasons.map((r) => r.code)).toContain("swapped");
+    expect(lunchOf(after).original).toEqual(lunchOf(before));
+    expect(lunchOf(after).reasons.map((r) => r.code).slice(0, 2)).toEqual(["meal_calories", "swapped"]);
     expect(after.days[at.day].totals.kcal).toBe(after.days[at.day].meals.reduce((k, m) => k + m.totals.kcal, 0));
     for (const d of after.days) {
       for (const m of d.meals) {
@@ -209,21 +210,25 @@ describe("swapping a meal", () => {
         expect(m).toEqual(before.days[d.day].meals.find((x) => x.slot === m.slot));
       }
     }
+    // A second swap still remembers the planner's meal, not the first swap.
+    expect(lunchOf(replaceMeal(after, at.day, at.slot, second)).original).toEqual(lunchOf(before));
+    expect(restoreMeal(after, at.day, at.slot)).toEqual(before);
+    expect(replaceMeal(after, at.day, at.slot, lunchOf(before))).toEqual(before);
   });
 
-  it("ignores a swap that no longer fits the diet, the rules or the food list", () => {
-    const before = planMeals(base);
-    const bad = [
-      [{ slug: "karahi", portionIndex: 0, quantity: 1 }, { slug: "roti", portionIndex: 0, quantity: 2 }], // not vegetarian
-      [{ slug: "deleted-food", portionIndex: 0, quantity: 1 }],
-      [{ slug: "daal", portionIndex: 0, quantity: 7 }], // not a quantity the planner uses
-      [{ slug: "daal", portionIndex: 3, quantity: 1 }], // no such portion
-    ];
-    for (const items of bad) {
-      const plan = planMeals({ ...base, dietType: "vegetarian", swaps: [{ ...at, items }] });
-      expect(lunchOf(plan).swapped).toBeUndefined();
-    }
-    expect(lunchOf(planMeals({ ...base, conditions: ["high_blood_pressure"], swaps: [{ ...at, items: [{ slug: "kabab", portionIndex: 0, quantity: 2 }] }] })).swapped).toBeUndefined();
-    expect(planMeals(base)).toEqual(before);
+  it("offers alternatives from the saved plan, not a fresh one", () => {
+    const saved = planMeals({ ...base, seed: "another-week" });
+    const fromSaved = mealAlternatives({ ...base, ...at, plan: saved });
+    for (const o of fromSaved) expect(mealChoice(o)).not.toEqual(mealChoice(lunchOf(saved)));
+  });
+
+  it("knows when a saved plan no longer fits the food list, diet or conditions", () => {
+    const plan = planMeals(base);
+    expect(mealPlanFits(plan, base)).toBe(true);
+    const used = allItems(plan).find((i) => i.role === "main")!.slug;
+    expect(mealPlanFits(plan, { ...base, foods: FOODS.filter((f) => f.slug !== used) })).toBe(false);
+    expect(mealPlanFits(plan, { ...base, dietType: "vegetarian" })).toBe(allItems(plan).every((i) => dietAllows("vegetarian", FOODS.find((f) => f.slug === i.slug)!)));
+    const salty = planMeals(base);
+    if (allItems(salty).some((i) => i.slug === "kabab")) expect(mealPlanFits(salty, { ...base, conditions: ["high_blood_pressure"] })).toBe(false);
   });
 });
