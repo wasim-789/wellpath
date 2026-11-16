@@ -5,24 +5,17 @@
 import { useState, type ReactNode } from 'react'
 import { Link, Navigate } from 'react-router'
 import { workoutReasonText, type DailyTargets, type MealPlan, type PlannedMeal, type WorkoutPlan } from '@wellpath/engine'
-import type { MealSlot } from '@wellpath/shared'
 import { AppShell, Notice } from '../components/app/AppShell'
 import { Icon, type IconName } from '../components/app/Icon'
 import { useAuth } from '../lib/auth'
 import { DIET_OPTIONS, GOAL_OPTIONS, labelOf } from '../lib/labels'
-import { MEAL_LABEL, useMealPlan } from '../lib/meals'
+import { MEAL_LABEL, SLOT_STYLE, useMealPlan } from '../lib/meals'
 import { useProfile } from '../lib/profile'
 import { dayDate, todayIndex } from '../lib/week'
 import { FOCUS_LABEL, LEVEL_LABEL, useWorkoutPlan } from '../lib/workouts'
 
 type Loaded<T> = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; data: { weekStart: string; plan: T } }
 
-const SLOT_ICON: Record<MealSlot, { icon: IconName; tint: string }> = {
-  breakfast: { icon: 'sunrise', tint: 'bg-amber-100 text-amber-600' },
-  lunch: { icon: 'bowl', tint: 'bg-emerald-100 text-emerald-600' },
-  snack: { icon: 'cup', tint: 'bg-rose-100 text-rose-500' },
-  dinner: { icon: 'moon', tint: 'bg-indigo-100 text-violet' },
-}
 
 function greeting(hour: number) {
   if (hour < 12) return 'Good morning'
@@ -173,7 +166,7 @@ function Stats({ targets, workouts }: { targets: DailyTargets; workouts: Loaded<
 /* ---------- today's meals ---------- */
 
 function MealRow({ meal }: { meal: PlannedMeal }) {
-  const { icon, tint } = SLOT_ICON[meal.slot]
+  const { icon, tint } = SLOT_STYLE[meal.slot]
   return (
     <li className="flex items-center gap-3 py-3">
       <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tint}`}><Icon name={icon} className="h-[18px] w-[18px]" /></span>

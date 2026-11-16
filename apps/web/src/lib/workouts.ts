@@ -23,3 +23,6 @@ export const undoExerciseSwap = (week: string, day: number, slug: string) =>
 
 export const FOCUS_LABEL = { strength: 'Strength', cardio: 'Cardio and core' } as const
 export const LEVEL_LABEL = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' } as const
+
+export const MUSCLE_LABEL = { legs: 'Legs', glutes: 'Glutes', chest: 'Chest', back: 'Back', shoulders: 'Shoulders', arms: 'Arms', core: 'Core', full_body: 'Full body' } as const
+export const EQUIPMENT_LABEL = { none: 'No equipment', chair: 'A sturdy chair', wall: 'A wall', step: 'A low step', resistance_band: 'A resistance band', water_bottles: 'Two filled water bottles' } as const
