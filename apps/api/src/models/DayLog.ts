@@ -16,6 +16,11 @@ const dayLogSchema = new Schema(
     /** Sets done per exercise slug. */
     sets: { type: Schema.Types.Mixed, default: {} },
     meals: { type: [{ type: String, enum: MEAL_SLOTS }], default: [] },
+    /**
+     * Foods the user typed in ("2 roti aur daal"), each with its meal, portion and nutrients worked out by the
+     * server from the food library: { id, slot, slug, name, quantity, portionIndex, amount, grams, nutrients }.
+     */
+    foods: { type: [Schema.Types.Mixed], default: [] },
     /** Glasses of water (250 ml). */
     water: { type: Number, default: 0, min: 0 },
     /** Morning weigh-in, when the user logged one. */

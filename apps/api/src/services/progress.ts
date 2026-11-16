@@ -6,8 +6,9 @@
  * simply counts what is in it now.
  */
 import type { Types } from "mongoose";
-import { waterTarget, weightTrend, type WaterTarget } from "@wellpath/engine";
-import type { MealSlot, SavedProfile } from "@wellpath/shared";
+import { foodItem, sumNutrients, waterTarget, weightTrend, type LogFood, type WaterTarget } from "@wellpath/engine";
+import { randomUUID } from "node:crypto";
+import type { MealSlot, Nutrients, SavedProfile } from "@wellpath/shared";
 import { HttpError } from "../middleware/errors.js";
 import { DayLog } from "../models/DayLog.js";
 import { WeekPlan } from "../models/WeekPlan.js";
@@ -40,7 +41,20 @@ export function userToday(value: unknown, now = Date.now()): string {
   return value;
 }
 
-type Log = { date: string; day: number; sets: Record<string, number>; meals: MealSlot[]; water?: number; weightKg?: number };
+/** A food the user typed in, as saved. */
+export type FoodEntry = {
+  id: string;
+  slot: MealSlot;
+  slug: string;
+  name: string;
+  quantity: number;
+  portionIndex: number;
+  amount: string;
+  grams: number;
+  nutrients: Nutrients;
+};
+
+type Log = { date: string; day: number; sets: Record<string, number>; meals: MealSlot[]; foods?: FoodEntry[]; water?: number; weightKg?: number };
 
 export type DayProgress = {
   day: number;
@@ -51,6 +65,10 @@ export type DayProgress = {
   workout: { done: number; total: number; complete: boolean } | null;
   /** Meals eaten, of the meals planned. */
   eaten: { done: number; total: number };
+  /** Foods typed in this day. */
+  foods: FoodEntry[];
+  /** Eaten so far: the planned meals ticked off plus the foods typed in. */
+  intake: { kcal: number; proteinG: number };
   water: number;
   weightKg: number | null;
   /** Something was done this day. */
@@ -64,12 +82,14 @@ export type WeekProgress = {
   week: { workoutsDone: number; workoutsPlanned: number; mealsEaten: number; mealsPlanned: number; activeDays: number };
   streak: { current: number; best: number };
   water: WaterTarget;
+  /** The day's targets from the meal plan, to compare intake with. */
+  targets: { calories: number; proteinG: number };
   /** The most recent weigh-in up to today, if any. */
   lastWeight: { date: string; weightKg: number } | null;
 };
 
-const isActive = (log: Pick<Log, "sets" | "meals" | "water" | "weightKg">) =>
-  log.meals.length > 0 || Object.values(log.sets).some((n) => n > 0) || (log.water ?? 0) > 0 || log.weightKg !== undefined;
+const isActive = (log: Pick<Log, "sets" | "meals" | "foods" | "water" | "weightKg">) =>
+  log.meals.length > 0 || (log.foods?.length ?? 0) > 0 || Object.values(log.sets).some((n) => n > 0) || (log.water ?? 0) > 0 || log.weightKg !== undefined;
 
 function dayProgress(saved: SavedWeek | null, date: string, day: number, log: Log | undefined): DayProgress {
   const sets = log?.sets ?? {};
@@ -79,6 +99,8 @@ function dayProgress(saved: SavedWeek | null, date: string, day: number, log: Lo
   const planned = saved?.meals.days[day]?.meals.filter((m) => m.items.length) ?? [];
   // Without the week's plan (a week never opened), every logged meal counts.
   const meals = saved ? (log?.meals ?? []).filter((slot) => planned.some((m) => m.slot === slot)) : (log?.meals ?? []);
+  const foods = log?.foods ?? [];
+  const eaten = sumNutrients([...planned.filter((m) => meals.includes(m.slot)).map((m) => m.totals), ...foods.map((f) => f.nutrients)]);
   return {
     day,
     date,
@@ -86,6 +108,8 @@ function dayProgress(saved: SavedWeek | null, date: string, day: number, log: Lo
     meals,
     workout: session ? { done, total: exercises.length, complete: exercises.length > 0 && done === exercises.length } : null,
     eaten: { done: meals.length, total: saved ? planned.length : meals.length },
+    foods,
+    intake: { kcal: eaten.kcal, proteinG: eaten.proteinG },
     water: log?.water ?? 0,
     weightKg: log?.weightKg ?? null,
     active: log ? isActive(log) : false,
@@ -136,6 +160,7 @@ export async function weekProgress(userId: Types.ObjectId, saved: SavedWeek, tod
     },
     streak: run,
     water: waterFor(profile, weight?.weightKg),
+    targets: { calories: saved.meals.target.calories, proteinG: saved.meals.target.proteinG },
     lastWeight: weight,
   };
 }
@@ -149,8 +174,8 @@ function checkDate(date: string, today: string) {
 async function save(userId: Types.ObjectId, date: string, change: (log: Log) => Log) {
   const { weekStart, day } = weekOf(date);
   const current = (await DayLog.findOne({ userId, date }).lean<Log>()) ?? { date, day, sets: {}, meals: [] };
-  const next = change({ ...current, sets: { ...current.sets }, meals: [...current.meals] });
-  const $set = { weekStart, day, sets: next.sets, meals: next.meals, water: next.water ?? 0, active: isActive(next) };
+  const next = change({ ...current, sets: { ...current.sets }, meals: [...current.meals], foods: [...(current.foods ?? [])] });
+  const $set = { weekStart, day, sets: next.sets, meals: next.meals, foods: next.foods ?? [], water: next.water ?? 0, active: isActive(next) };
   await DayLog.updateOne(
     { userId, date },
     next.weightKg === undefined ? { $set, $unset: { weightKg: 1 } } : { $set: { ...$set, weightKg: next.weightKg } },
@@ -215,14 +240,51 @@ export async function removeWeight(userId: Types.ObjectId, date: string, today: 
   });
 }
 
+/** Most foods that can be typed in for one day: plenty for real eating, and a limit on misuse. */
+export const MAX_FOODS_PER_DAY = 60;
+
+export type FoodChoice = { slug: string; portionIndex: number; quantity: number };
+
+/**
+ * Adds foods to one meal of one day. Each must be in the food library, and the nutrients are always worked
+ * out here from the library, so what is saved never depends on numbers sent by the app.
+ */
+export async function logFoods(userId: Types.ObjectId, saved: SavedWeek, day: number, slot: MealSlot, choices: FoodChoice[], today: string, library: readonly LogFood[]) {
+  const date = dateOf(saved.weekStart, day);
+  checkDate(date, today);
+  const bySlug = new Map(library.map((f) => [f.slug, f]));
+  const entries: FoodEntry[] = choices.map((c) => {
+    const food = bySlug.get(c.slug);
+    if (!food) throw new HttpError(404, `There is no food called "${c.slug}". Pick it again from the list.`);
+    if (!food.portions[c.portionIndex]) throw new HttpError(400, `${food.name} has no portion number ${c.portionIndex}`);
+    const item = foodItem(food, c.portionIndex, c.quantity);
+    return { id: randomUUID(), slot, slug: item.slug, name: item.name, quantity: item.quantity, portionIndex: item.portionIndex, amount: item.amount, grams: item.grams, nutrients: item.nutrients };
+  });
+  await save(userId, date, (log) => {
+    if ((log.foods?.length ?? 0) + entries.length > MAX_FOODS_PER_DAY) throw new HttpError(400, `A day can hold up to ${MAX_FOODS_PER_DAY} foods.`);
+    return { ...log, foods: [...(log.foods ?? []), ...entries] };
+  });
+}
+
+/** Removes one typed-in food. */
+export async function removeFood(userId: Types.ObjectId, saved: SavedWeek, day: number, id: string, today: string) {
+  const date = dateOf(saved.weekStart, day);
+  checkDate(date, today);
+  const log = await DayLog.findOne({ userId, date, "foods.id": id }, { _id: 1 }).lean();
+  if (!log) throw new HttpError(404, "That food is not in your log any more.");
+  await save(userId, date, (l) => ({ ...l, foods: (l.foods ?? []).filter((f) => f.id !== id) }));
+}
+
 export const HISTORY_RANGES = [7, 30, 90] as const;
 
 export type History = {
   from: string;
   to: string;
-  days: { date: string; weightKg: number | null; water: number; meals: number; workout: { done: number; total: number } | null }[];
+  days: { date: string; weightKg: number | null; water: number; meals: number; kcal: number; workout: { done: number; total: number } | null }[];
   trend: { date: string; trendKg: number }[];
   water: WaterTarget;
+  /** The calorie target from the most recent week plan in the range, for the calories chart. */
+  targetKcal: number | null;
 };
 
 /** Day-by-day numbers for the charts: weight (with its 7-day trend), water, meals eaten and workouts. */
@@ -241,9 +303,10 @@ export async function history(userId: Types.ObjectId, today: string, days: numbe
     const date = iso(dayNumber(from) + i * DAY_MS);
     const { weekStart, day } = weekOf(date);
     const p = dayProgress(planFor.get(weekStart) ?? null, date, day, byDate.get(date));
-    return { date, weightKg: p.weightKg, water: p.water, meals: p.eaten.done, workout: p.workout && { done: p.workout.done, total: p.workout.total } };
+    return { date, weightKg: p.weightKg, water: p.water, meals: p.eaten.done, kcal: p.intake.kcal, workout: p.workout && { done: p.workout.done, total: p.workout.total } };
   });
   const weighIns = logs.filter((l) => l.weightKg !== undefined && l.weightKg !== null).map((l) => ({ date: l.date, weightKg: l.weightKg! }));
   const latest = weighIns.at(-1)?.weightKg;
-  return { from, to, days: series, trend: weightTrend(weighIns).filter((t) => t.date >= from), water: waterFor(profile, latest) };
+  const newest = [...plans].sort((a, b) => b.weekStart.localeCompare(a.weekStart))[0];
+  return { from, to, days: series, trend: weightTrend(weighIns).filter((t) => t.date >= from), water: waterFor(profile, latest), targetKcal: newest?.meals.target.calories ?? null };
 }
