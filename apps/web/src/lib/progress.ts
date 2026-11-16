@@ -5,7 +5,8 @@
  * Changes show at once and are put back if the server refuses them.
  */
 import { useEffect, useSyncExternalStore } from 'react'
-import type { MealSlot } from '@wellpath/shared'
+import type { FoodTextResult, LogFood } from '@wellpath/engine'
+import type { MealSlot, Nutrients } from '@wellpath/shared'
 import { ApiError, api, isSignedIn, onAuthChange } from './auth'
 import { toast } from './toast'
 import { localWeekStart } from './week'
@@ -17,10 +18,14 @@ export type DayProgress = {
   meals: MealSlot[]
   workout: { done: number; total: number; complete: boolean } | null
   eaten: { done: number; total: number }
+  foods: FoodEntry[]
+  intake: { kcal: number; proteinG: number }
   water: number
   weightKg: number | null
   active: boolean
 }
+
+export type FoodEntry = { id: string; slot: MealSlot; slug: string; name: string; quantity: number; portionIndex: number; amount: string; grams: number; nutrients: Nutrients }
 
 export type WaterTarget = { glasses: number; ml: number; reason: string }
 
@@ -31,15 +36,17 @@ export type WeekProgress = {
   week: { workoutsDone: number; workoutsPlanned: number; mealsEaten: number; mealsPlanned: number; activeDays: number }
   streak: { current: number; best: number }
   water: WaterTarget
+  targets: { calories: number; proteinG: number }
   lastWeight: { date: string; weightKg: number } | null
 }
 
 export type History = {
   from: string
   to: string
-  days: { date: string; weightKg: number | null; water: number; meals: number; workout: { done: number; total: number } | null }[]
+  days: { date: string; weightKg: number | null; water: number; meals: number; kcal: number; workout: { done: number; total: number } | null }[]
   trend: { date: string; trendKg: number }[]
   water: WaterTarget
+  targetKcal: number | null
 }
 
 type State = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; data: WeekProgress }
@@ -172,6 +179,29 @@ export async function saveWeight(weightKg: number, date?: string) {
 export async function removeWeight(date: string) {
   await api<void>('/api/v1/progress/weight?today=' + localToday() + '&date=' + date, { method: 'DELETE' })
   await load()
+}
+
+/* ---------- typed-in food ---------- */
+
+/** The food library for the picker, loaded once per visit. */
+let library: Promise<LogFood[]> | null = null
+export function foodLibrary(): Promise<LogFood[]> {
+  library ??= api<{ foods: LogFood[] }>('/api/v1/progress/foods').then((r) => r.foods, (err: unknown) => { library = null; throw err })
+  return library
+}
+
+/** What a piece of text says was eaten. Saves nothing. */
+export const readFood = (text: string) => api<FoodTextResult>('/api/v1/progress/food/read', { method: 'POST', body: JSON.stringify({ text }) })
+
+/** Adds foods to one meal of one day. The server works out the nutrients from the library. */
+export async function logFoods(day: number, slot: MealSlot, items: { slug: string; portionIndex: number; quantity: number }[]) {
+  const data = await api<WeekProgress>('/api/v1/progress/food', { method: 'POST', body: JSON.stringify({ week: localWeekStart(), today: localToday(), day, slot, items }) })
+  set({ status: 'ready', data })
+}
+
+export async function removeFood(day: number, id: string) {
+  const data = await api<WeekProgress>('/api/v1/progress/food?week=' + localWeekStart() + '&today=' + localToday() + '&day=' + day + '&id=' + id, { method: 'DELETE' })
+  set({ status: 'ready', data })
 }
 
 /** Day-by-day numbers for the charts. */

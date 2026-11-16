@@ -152,6 +152,29 @@ function waterChart(h: History): ChartConfiguration {
   }
 }
 
+const ORANGE = '#fb923c'
+const AMBER = '#f59e0b'
+
+/** Calories eaten each day (ticked planned meals plus typed-in foods) against the target. */
+function caloriesChart(h: History): ChartConfiguration {
+  const target = h.targetKcal
+  const colour = (kcal: number) => (!target || kcal === 0 ? ORANGE : Math.abs(kcal - target) <= target * 0.1 ? EMERALD : kcal > target ? AMBER : ORANGE)
+  return {
+    type: 'bar',
+    data: {
+      labels: h.days.map((d) => short(d.date)),
+      datasets: [
+        ...(target ? [{ type: 'line' as const, label: `Target (${target.toLocaleString()} kcal)`, data: h.days.map(() => target), borderColor: VIOLET, borderDash: [6, 6], borderWidth: 2, pointRadius: 0 }] : []),
+        { type: 'bar' as const, label: 'Eaten', data: h.days.map((d) => d.kcal), backgroundColor: h.days.map((d) => colour(d.kcal)), borderRadius: 6, maxBarThickness: 28 },
+      ],
+    },
+    options: {
+      plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${Number(c.parsed.y).toLocaleString()} kcal` } } },
+      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } }, y: { beginAtZero: true, suggestedMax: target ? target * 1.25 : undefined, ticks: { callback: (v) => `${v}` } } },
+    },
+  }
+}
+
 function consistencyChart(h: History): ChartConfiguration {
   return {
     type: 'bar',
@@ -182,12 +205,13 @@ function Summary({ h }: { h: History }) {
   const change = first && last && first !== last ? Math.round((last.trendKg - first.trendKg) * 10) / 10 : null
   const avgWater = Math.round((h.days.reduce((t, d) => t + d.water, 0) / h.days.length) * 10) / 10
   const workouts = h.days.filter((d) => d.workout && d.workout.total > 0 && d.workout.done === d.workout.total).length
-  const meals = h.days.reduce((t, d) => t + d.meals, 0)
+  const logged = h.days.filter((d) => d.kcal > 0)
+  const avgKcal = logged.length ? Math.round(logged.reduce((t, d) => t + d.kcal, 0) / logged.length) : null
   const items: { icon: IconName; tint: string; label: string; value: string }[] = [
     { icon: 'scale', tint: 'bg-violet/10 text-violet', label: 'Weight trend', value: change === null ? 'Not enough data' : `${change > 0 ? '+' : ''}${change} kg` },
     { icon: 'drop', tint: 'bg-sky-100 text-sky-600', label: 'Average water', value: `${avgWater} glasses` },
     { icon: 'dumbbell', tint: 'bg-indigo-100 text-violet', label: 'Workouts done', value: String(workouts) },
-    { icon: 'bowl', tint: 'bg-emerald-100 text-emerald-600', label: 'Meals eaten', value: String(meals) },
+    { icon: 'flame', tint: 'bg-orange-100 text-orange-500', label: 'Avg calories / day', value: avgKcal === null ? 'Nothing logged' : avgKcal.toLocaleString() + ' kcal' },
   ]
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -232,7 +256,7 @@ export function Progress() {
   }, [range, version])
 
   const h = history && 'data' in history ? history.data : null
-  const charts = useMemo(() => (h ? { weight: weightChart(h), water: waterChart(h), consistency: consistencyChart(h) } : null), [h])
+  const charts = useMemo(() => (h ? { weight: weightChart(h), water: waterChart(h), consistency: consistencyChart(h), calories: caloriesChart(h) } : null), [h])
 
   if (saved.status === 'error' && /onboarding/i.test(saved.message)) return <Navigate to="/onboarding" replace />
 
@@ -270,6 +294,9 @@ export function Progress() {
             <Summary h={h} />
             <Card icon="scale" tint="bg-violet/10 text-violet" title="Weight" sub="The trend line averages the last 7 days, so one heavy day does not throw you off.">
               {h.trend.length ? <Chart config={charts.weight} label={`Weight over the last ${range} days`} className="h-64" /> : <Empty text="Log your weight above. Your trend appears here after your first weigh-in." />}
+            </Card>
+            <Card icon="flame" tint="bg-orange-100 text-orange-500" title="Calories eaten" sub="Planned meals you ticked plus foods you typed in. Green days are within 10% of your target.">
+              {h.days.some((d) => d.kcal > 0) ? <Chart config={charts.calories} label={'Calories eaten each day over the last ' + range + ' days'} /> : <Empty text="Tick off meals or log what you ate. Your calories appear here." />}
             </Card>
             <div className="grid gap-6 lg:grid-cols-2">
               <Card icon="drop" tint="bg-sky-100 text-sky-600" title="Water" sub="Green bars reached the goal.">
