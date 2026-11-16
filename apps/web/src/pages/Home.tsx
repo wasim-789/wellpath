@@ -11,6 +11,7 @@ import { useAuth } from '../lib/auth'
 import { DIET_OPTIONS, GOAL_OPTIONS, labelOf } from '../lib/labels'
 import { MEAL_LABEL, SLOT_STYLE, useMealPlan } from '../lib/meals'
 import { useProfile } from '../lib/profile'
+import { setMealEaten, useProgress, type DayProgress, type WeekProgress } from '../lib/progress'
 import { dayDate, todayIndex } from '../lib/week'
 import { FOCUS_LABEL, LEVEL_LABEL, useWorkoutPlan } from '../lib/workouts'
 
@@ -165,10 +166,12 @@ function Stats({ targets, workouts }: { targets: DailyTargets; workouts: Loaded<
 
 /* ---------- today's meals ---------- */
 
-function MealRow({ meal }: { meal: PlannedMeal }) {
+/** One meal, with a tick-box to mark it as eaten straight from the dashboard. */
+function MealRow({ meal, eaten }: { meal: PlannedMeal; eaten?: boolean }) {
   const { icon, tint } = SLOT_STYLE[meal.slot]
+  const canTick = eaten !== undefined && meal.items.length > 0
   return (
-    <li className="flex items-center gap-3 py-3">
+    <li className={`flex items-center gap-3 py-3 transition ${eaten ? 'opacity-70' : ''}`}>
       <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tint}`}><Icon name={icon} className="h-[18px] w-[18px]" /></span>
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted">
@@ -178,11 +181,21 @@ function MealRow({ meal }: { meal: PlannedMeal }) {
         <p className="truncate text-sm font-medium text-heading">{meal.items.length ? meal.items.map((i) => i.name).join(', ') : 'Nothing suitable yet'}</p>
       </div>
       <p className="shrink-0 text-sm font-semibold tabular-nums text-heading">{Math.round(meal.totals.kcal)}<span className="ml-0.5 text-xs font-normal text-muted">kcal</span></p>
+      {canTick && (
+        <button
+          type="button" aria-pressed={eaten} onClick={() => void setMealEaten(todayIndex(), meal.slot, !eaten)}
+          aria-label={eaten ? `Mark ${MEAL_LABEL[meal.slot].toLowerCase()} as not eaten` : `Mark ${MEAL_LABEL[meal.slot].toLowerCase()} as eaten`}
+          title={eaten ? 'Eaten. Tap to undo' : 'Mark as eaten'}
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition ${eaten ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-line text-transparent hover:border-emerald-400 hover:text-emerald-400'}`}
+        >
+          <Icon name="check" className="h-4 w-4" strokeWidth={3} />
+        </button>
+      )}
     </li>
   )
 }
 
-function TodayMeals({ state, retry }: { state: Loaded<MealPlan>; retry: () => void }) {
+function TodayMeals({ state, retry, progress }: { state: Loaded<MealPlan>; retry: () => void; progress?: DayProgress }) {
   const today = state.status === 'ready' ? state.data.plan.days[todayIndex()] : null
   return (
     <section className="card p-5 sm:p-6">
@@ -195,7 +208,8 @@ function TodayMeals({ state, retry }: { state: Loaded<MealPlan>; retry: () => vo
       {state.status === 'error' && <LoadError message={state.message} retry={retry} />}
       {today && (
         <>
-          <ul className="mt-2 divide-y divide-line">{today.meals.map((m) => <MealRow key={m.slot} meal={m} />)}</ul>
+          {progress && <p className="mt-3 text-xs text-muted">Tick each meal once you've eaten it.</p>}
+          <ul className="mt-1 divide-y divide-line">{today.meals.map((m) => <MealRow key={m.slot} meal={m} eaten={progress ? progress.meals.includes(m.slot) : undefined} />)}</ul>
           <div className="mt-4 flex flex-wrap gap-2">
             <Link to={`/meals?day=${todayIndex()}`} className="btn-primary inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white">
               See portions <Icon name="arrowRight" className="h-4 w-4" />
@@ -212,12 +226,15 @@ function TodayMeals({ state, retry }: { state: Loaded<MealPlan>; retry: () => vo
 
 /* ---------- today's workout ---------- */
 
-function TodayWorkout({ state, retry }: { state: Loaded<WorkoutPlan> ; retry: () => void }) {
+function TodayWorkout({ state, retry, progress }: { state: Loaded<WorkoutPlan>; retry: () => void; progress?: DayProgress }) {
   const t = todayIndex()
   const plan = state.status === 'ready' ? state.data.plan : null
   const day = plan?.days[t]
   const s = day?.session
   const next = plan?.days.find((d) => d.day > t && d.session)
+  const done = progress?.workout?.done ?? 0
+  const total = progress?.workout?.total ?? 0
+  const complete = progress?.workout?.complete ?? false
 
   return (
     <section className="card p-5 sm:p-6">
@@ -252,8 +269,14 @@ function TodayWorkout({ state, retry }: { state: Loaded<WorkoutPlan> ; retry: ()
               </li>
             ))}
           </ol>
-          <Link to={`/workouts?day=${t}`} className="btn-primary mt-5 inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white">
-            <Icon name="play" className="h-4 w-4" strokeWidth={2.2} /> Start workout
+          {done > 0 && (
+            <div className="mt-4">
+              <div className="flex justify-between text-xs font-semibold"><span className="text-emerald-700">{complete ? 'Workout complete. Well done!' : 'In progress'}</span><span className="tabular-nums text-muted">{done} of {total} moves</span></div>
+              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-ink-2"><div className="h-full rounded-full bg-emerald-500 transition-[width] duration-500" style={{ width: `${(done / total) * 100}%` }} /></div>
+            </div>
+          )}
+          <Link to={`/workouts?day=${t}`} className={`mt-5 inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold ${complete ? 'bg-emerald-50 text-emerald-700 ring-2 ring-emerald-300' : 'btn-primary text-white'}`}>
+            <Icon name={complete ? 'checkCircle' : 'play'} className="h-4 w-4" strokeWidth={2.2} /> {complete ? 'Workout done. See it' : done > 0 ? 'Continue workout' : 'Start workout'}
           </Link>
         </>
       )}
@@ -378,6 +401,70 @@ function QuickActions() {
   )
 }
 
+/* ---------- progress ---------- */
+
+function Ring({ value, total, color, children }: { value: number; total: number; color: string; children: ReactNode }) {
+  const R = 26
+  const full = 2 * Math.PI * R
+  const share = total ? Math.min(1, value / total) : 0
+  return (
+    <div className="relative h-16 w-16 shrink-0">
+      <svg viewBox="0 0 64 64" className="h-16 w-16 -rotate-90" aria-hidden="true">
+        <circle cx="32" cy="32" r={R} fill="none" stroke="#eef2ff" strokeWidth="7" />
+        <circle cx="32" cy="32" r={R} fill="none" stroke={color} strokeWidth="7" strokeLinecap="round" strokeDasharray={full} strokeDashoffset={full * (1 - share)} style={{ transition: 'stroke-dashoffset 0.6s ease' }} />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center">{children}</span>
+    </div>
+  )
+}
+
+/** Today's workout and meals ticked off, the streak, and the week so far. */
+function TodayProgress({ p }: { p: WeekProgress }) {
+  const today = p.days[todayIndex()]!
+  const w = today.workout
+  const allDone = (!w || w.complete) && today.eaten.total > 0 && today.eaten.done === today.eaten.total
+  return (
+    <section className="card overflow-hidden">
+      <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-50 to-white px-5 py-4">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600"><Icon name="checkCircle" /></span>
+          <div>
+            <h2 className="text-base font-bold text-heading">Today's progress</h2>
+            <p className="text-xs text-muted">{allDone ? 'Everything done today. Brilliant!' : 'Saved to your account'}</p>
+          </div>
+        </div>
+        <div className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-extrabold ${p.streak.current ? 'bg-orange-100 text-orange-600' : 'bg-ink-2 text-muted'}`} title={`Best streak: ${p.streak.best} days`}>
+          <Icon name="flame" className="h-4 w-4" />{p.streak.current}<span className="text-xs font-semibold">day streak</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3 p-5">
+        <div className="flex items-center gap-3">
+          <Ring value={w?.done ?? 0} total={w?.total ?? 0} color="#4f46e5">
+            {w ? <span className="text-sm font-extrabold tabular-nums text-heading">{w.done}/{w.total}</span> : <Icon name="moon" className="h-5 w-5 text-muted" />}
+          </Ring>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-heading">Workout</p>
+            <p className="text-xs text-muted">{!w ? 'Rest day' : w.complete ? 'Done!' : `${w.total - w.done} moves to go`}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <Ring value={today.eaten.done} total={today.eaten.total} color="#10b981">
+            <span className="text-sm font-extrabold tabular-nums text-heading">{today.eaten.done}/{today.eaten.total}</span>
+          </Ring>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-heading">Meals</p>
+            <p className="text-xs text-muted">{today.eaten.done === today.eaten.total ? 'All eaten' : `${today.eaten.total - today.eaten.done} to go`}</p>
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-5 py-3 text-xs">
+        <span className="text-muted">This week: <span className="font-semibold text-heading">{p.week.workoutsDone} of {p.week.workoutsPlanned}</span> workouts · <span className="font-semibold text-heading">{p.week.mealsEaten} of {p.week.mealsPlanned}</span> meals</span>
+        <Link to="/week" className="font-semibold text-violet hover:underline">See the week</Link>
+      </div>
+    </section>
+  )
+}
+
 /* ---------- page ---------- */
 
 export function Home() {
@@ -385,6 +472,8 @@ export function Home() {
   const { state, retry } = useProfile()
   const meals = useMealPlan()
   const workouts = useWorkoutPlan()
+  const progress = useProgress(meals.state.status === 'ready' ? meals.state.data.plan : null)
+  const todayProgress = progress.status === 'ready' ? progress.data.days[todayIndex()] : undefined
   const [now] = useState(() => new Date())
   const firstName = auth.status === 'signed-in' ? auth.user.name.split(' ')[0] : ''
 
@@ -418,10 +507,11 @@ export function Home() {
 
             <div className="grid gap-6 lg:grid-cols-3">
               <div className="space-y-6 lg:col-span-2">
-                <TodayWorkout state={workouts.state} retry={workouts.retry} />
-                <TodayMeals state={meals.state} retry={meals.retry} />
+                <TodayWorkout state={workouts.state} retry={workouts.retry} progress={todayProgress} />
+                <TodayMeals state={meals.state} retry={meals.retry} progress={todayProgress} />
               </div>
               <div className="space-y-6">
+                {progress.status === 'ready' && <TodayProgress p={progress.data} />}
                 <WeekGlance meals={meals.state} workouts={workouts.state} />
                 <Targets targets={targets} />
                 <QuickActions />

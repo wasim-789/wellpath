@@ -7,7 +7,7 @@ import { ExerciseCard, type Swap } from '../components/app/ExerciseCard'
 import { Icon, type IconName } from '../components/app/Icon'
 import { MiniStat, PageHeader } from '../components/app/PageHeader'
 import { StartOver } from '../components/app/StartOver'
-import { useDayProgress } from '../lib/progress'
+import { isFuture, setSets, useProgress } from '../lib/progress'
 import { dayDate, dayFromQuery, todayIndex } from '../lib/week'
 import { FOCUS_LABEL, LEVEL_LABEL, useWorkoutPlan } from '../lib/workouts'
 
@@ -17,7 +17,7 @@ const BLOCKS: { key: 'warmup' | 'main' | 'cooldown'; title: string; sub: string;
   { key: 'cooldown', title: 'Cool-down', sub: 'Hold each stretch gently. It should never hurt.', icon: 'heart', tint: 'bg-sky-100 text-sky-600' },
 ]
 
-type Progress = { done: Record<string, number>; setSets: (slug: string, sets: number) => void }
+type Progress = { done: Record<string, number>; setSets: (slug: string, sets: number) => void; locked: boolean }
 
 function Block({ title, sub, icon, tint, items, start, swap, progress }: {
   title: string; sub: string; icon: IconName; tint: string; items: PlannedExercise[]; start: number; swap: Swap; progress: Progress
@@ -38,15 +38,22 @@ function Block({ title, sub, icon, tint, items, start, swap, progress }: {
       </div>
       <div className="space-y-4">
         {items.map((e, i) => (
-          <ExerciseCard key={`${swap.day}-${e.slug}`} e={e} index={start + i} swap={swap} done={progress.done[e.slug] ?? 0} onDone={(n) => progress.setSets(e.slug, n)} />
+          <ExerciseCard key={`${swap.day}-${e.slug}`} e={e} index={start + i} swap={swap} done={progress.done[e.slug] ?? 0} onDone={(n) => progress.setSets(e.slug, n)} locked={progress.locked} />
         ))}
       </div>
     </section>
   )
 }
 
-function SessionView({ session, swap, date, today }: { session: WorkoutSession; swap: Swap; date: Date; today: boolean }) {
-  const progress = useDayProgress(swap.weekStart, swap.day)
+function SessionView({ session, swap, date, today, plan }: { session: WorkoutSession; swap: Swap; date: Date; today: boolean; plan: WorkoutPlan }) {
+  // Reloads when the plan changes (a swap or new workouts), since progress is counted against it.
+  const saved = useProgress(plan)
+  const ready = saved.status === 'ready'
+  const progress: Progress = {
+    done: ready ? saved.data.days[swap.day]!.sets : {},
+    setSets: (slug, n) => void setSets(swap.day, slug, n),
+    locked: !ready || isFuture(saved.data, swap.day),
+  }
   const all = [...session.warmup, ...session.main, ...session.cooldown]
   const totalSets = all.reduce((t, e) => t + e.sets, 0)
   const doneSets = all.reduce((t, e) => t + Math.min(e.sets, progress.done[e.slug] ?? 0), 0)
@@ -74,7 +81,7 @@ function SessionView({ session, swap, date, today }: { session: WorkoutSession; 
           </div>
           <div className="mt-5">
             <div className="flex items-baseline justify-between text-sm">
-              <span className="font-semibold">{pct === 100 ? 'Workout complete. Well done!' : 'Your progress'}</span>
+              <span className="font-semibold">{pct === 100 ? 'Workout complete. Well done!' : progress.locked ? 'Coming up: tick it off on the day' : 'Your progress (saved to your account)'}</span>
               <span className="tabular-nums text-indigo-200">{finished} of {all.length} moves · {pct}%</span>
             </div>
             <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-white/15">
@@ -162,7 +169,7 @@ export function Workouts() {
             <DayTabs weekStart={weekStart} value={day} onChange={pick} note={(d) => (plan.days[d].session ? { icon: 'dumbbell', text: 'Workout' } : { icon: 'moon', text: 'Rest day' })} />
 
             {s
-              ? <SessionView key={`${weekStart}-${day}`} session={s} swap={{ weekStart, day, onPlan: replace }} date={date} today={day === todayIndex()} />
+              ? <SessionView key={`${weekStart}-${day}`} session={s} swap={{ weekStart, day, onPlan: replace }} date={date} today={day === todayIndex()} plan={plan} />
               : <RestDay plan={plan} day={day} weekStart={weekStart} date={date} />}
 
             <Notice tone="amber" title="Stay safe" items={['Stop if you feel chest pain, dizziness, or sharp or growing pain, and see a doctor if it does not settle quickly.']} />

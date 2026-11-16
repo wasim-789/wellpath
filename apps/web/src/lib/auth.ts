@@ -34,6 +34,10 @@ client.subscribe(() => {
 
 export const wasSignedOutOnPurpose = () => signedOutOnPurpose
 
+/** For stores that hold one user's data and must clear it when they sign out. */
+export const onAuthChange = (listener: () => void) => client.subscribe(listener)
+export const isSignedIn = () => client.getState().status === 'signed-in'
+
 export async function logout(): Promise<void> {
   signedOutOnPurpose = true
   await client.logout()

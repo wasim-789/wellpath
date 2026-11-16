@@ -7,6 +7,8 @@ import { toast } from '../../lib/toast'
 import { Icon } from './Icon'
 
 type Swap = { weekStart: string; day: number; onPlan: (data: MealsResponse) => void }
+/** Whether the meal was eaten, saved to the account. Locked on days still to come. */
+type Eaten = { value: boolean; locked: boolean; onChange: (eaten: boolean) => void }
 
 
 const errorText = (err: unknown, fallback: string) => (err instanceof ApiError ? err.message : fallback)
@@ -45,7 +47,7 @@ function Items({ meal }: { meal: PlannedMeal }) {
   )
 }
 
-export function MealCard({ meal, swap }: { meal: PlannedMeal; swap?: Swap }) {
+export function MealCard({ meal, swap, eaten }: { meal: PlannedMeal; swap?: Swap; eaten?: Eaten }) {
   const [options, setOptions] = useState<PlannedMeal[] | null>(null)
   const [busy, setBusy] = useState(false)
   // The calorie line is already shown in the header, so only the extra reasons are listed.
@@ -83,7 +85,7 @@ export function MealCard({ meal, swap }: { meal: PlannedMeal; swap?: Swap }) {
   }
 
   return (
-    <article className="card flex flex-col overflow-hidden">
+    <article className={'card flex flex-col overflow-hidden transition ' + (eaten?.value ? 'ring-2 ring-emerald-300' : '')}>
       <div className={`flex items-center justify-between gap-3 bg-gradient-to-r ${style.band} to-white px-5 py-4`}>
         <div className="flex items-center gap-3">
           <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${style.tint}`}><Icon name={style.icon} /></span>
@@ -92,6 +94,7 @@ export function MealCard({ meal, swap }: { meal: PlannedMeal; swap?: Swap }) {
             <h3 className="flex items-center gap-2 text-lg font-bold text-heading">
               {label}
               {meal.swapped && <span className="rounded-full bg-mint/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">Your pick</span>}
+              {eaten?.value && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[11px] font-semibold text-white"><Icon name="check" className="h-3 w-3" strokeWidth={3} />Eaten</span>}
             </h3>
           </div>
         </div>
@@ -110,6 +113,19 @@ export function MealCard({ meal, swap }: { meal: PlannedMeal; swap?: Swap }) {
           <ul className="space-y-1.5 rounded-xl bg-ink-3/60 p-3 text-xs text-text">
             {why.map((r) => <li key={r.code} className="flex gap-2"><Icon name="sparkle" className="mt-px h-3.5 w-3.5 shrink-0 text-violet" />{reasonText(r)}</li>)}
           </ul>
+        )}
+
+        {eaten && meal.items.length > 0 && (
+          eaten.locked
+            ? <p className="flex items-center gap-2 rounded-xl bg-ink-2 px-3 py-2.5 text-xs text-muted"><Icon name="clock" className="h-3.5 w-3.5" />You can mark this as eaten on the day.</p>
+            : (
+              <button
+                type="button" aria-pressed={eaten.value} onClick={() => eaten.onChange(!eaten.value)}
+                className={'inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition ' + (eaten.value ? 'bg-emerald-500 text-white shadow-sm hover:bg-emerald-600' : 'border-2 border-emerald-300 bg-emerald-50 text-emerald-700 hover:border-emerald-500')}
+              >
+                <Icon name="checkCircle" className="h-4 w-4" strokeWidth={2.2} />{eaten.value ? 'Eaten. Tap to undo' : 'Mark as eaten'}
+              </button>
+            )
         )}
 
         {swap && meal.items.length > 0 && !options && (

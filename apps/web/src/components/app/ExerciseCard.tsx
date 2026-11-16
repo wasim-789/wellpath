@@ -101,7 +101,7 @@ function SetTracker({ total, done, onChange }: { total: number; done: number; on
   )
 }
 
-export function ExerciseCard({ e, index, swap, done, onDone }: { e: PlannedExercise; index: number; swap: Swap; done: number; onDone: (sets: number) => void }) {
+export function ExerciseCard({ e, index, swap, done, onDone, locked = false }: { e: PlannedExercise; index: number; swap: Swap; done: number; onDone: (sets: number) => void; locked?: boolean }) {
   const [options, setOptions] = useState<PlannedExercise[] | null>(null)
   const [busy, setBusy] = useState(false)
   const guide = GUIDES[e.slug]
@@ -188,8 +188,9 @@ export function ExerciseCard({ e, index, swap, done, onDone }: { e: PlannedExerc
             <p className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-muted">
               Track your sets <span className="normal-case tracking-normal tabular-nums">{Math.min(done, e.sets)} of {e.sets} done</span>
             </p>
-            {e.seconds && !finished && <Timer key={`${e.slug}-${done}`} seconds={e.seconds} onDone={() => onDone(Math.min(e.sets, done + 1))} />}
-            <SetTracker total={e.sets} done={done} onChange={onDone} />
+            {locked && <p className="flex items-center gap-2 text-xs text-muted"><Icon name="clock" className="h-3.5 w-3.5" />You can tick these off on the day.</p>}
+            {!locked && e.seconds && !finished && <Timer key={`${e.slug}-${done}`} seconds={e.seconds} onDone={() => onDone(Math.min(e.sets, done + 1))} />}
+            {!locked && <SetTracker total={e.sets} done={done} onChange={onDone} />}
           </div>
           </div>
           </div>

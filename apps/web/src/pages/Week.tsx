@@ -8,7 +8,7 @@ import { AppShell } from '../components/app/AppShell'
 import { Icon } from '../components/app/Icon'
 import { MiniStat, PageHeader } from '../components/app/PageHeader'
 import { MEAL_LABEL, SLOT_STYLE, useMealPlan } from '../lib/meals'
-import { finishedCount } from '../lib/progress'
+import { useProgress, type DayProgress, type WeekProgress } from '../lib/progress'
 import { dayDate, todayIndex } from '../lib/week'
 import { FOCUS_LABEL, useWorkoutPlan } from '../lib/workouts'
 
@@ -60,14 +60,44 @@ function WeekChart({ meals, workouts, weekStart }: { meals: MealPlan; workouts: 
   )
 }
 
-function DayCard({ weekStart, meals, workout, target }: { weekStart: string; meals: PlannedDay; workout: WorkoutDay; target: number }) {
+/** The week so far: workouts done, meals eaten and the streak, in one highlighted band. */
+function SoFar({ p }: { p: WeekProgress }) {
+  const items = [
+    { icon: 'dumbbell' as const, label: 'Workouts done', done: p.week.workoutsDone, total: p.week.workoutsPlanned },
+    { icon: 'bowl' as const, label: 'Meals eaten', done: p.week.mealsEaten, total: p.week.mealsPlanned },
+  ]
+  return (
+    <section className="bg-deep relative overflow-hidden rounded-3xl p-5 text-white shadow-lg shadow-indigo-900/20 sm:p-6">
+      <div className="pointer-events-none absolute -right-10 -top-16 h-48 w-48 rounded-full bg-fuchsia-400/30 blur-3xl" />
+      <div className="relative">
+        <h2 className="font-bold">This week so far</h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          {items.map((i) => (
+            <div key={i.label} className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/15">
+              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-indigo-200"><Icon name={i.icon} className="h-4 w-4" />{i.label}</p>
+              <p className="mt-1 text-2xl font-extrabold tabular-nums">{i.done}<span className="text-base font-semibold text-indigo-200"> of {i.total}</span></p>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/15"><div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-300 transition-[width] duration-500" style={{ width: `${i.total ? (i.done / i.total) * 100 : 0}%` }} /></div>
+            </div>
+          ))}
+          <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/15">
+            <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-indigo-200"><Icon name="flame" className="h-4 w-4" />Streak</p>
+            <p className="mt-1 text-2xl font-extrabold tabular-nums">{p.streak.current}<span className="text-base font-semibold text-indigo-200"> {p.streak.current === 1 ? 'day' : 'days'}</span></p>
+            <p className="mt-1 text-xs text-indigo-200">{p.streak.current ? `Best: ${p.streak.best} days. Keep it going today!` : 'Tick off a set or a meal today to start one.'}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function DayCard({ weekStart, meals, workout, target, progress }: { weekStart: string; meals: PlannedDay; workout: WorkoutDay; target: number; progress?: DayProgress }) {
   const t = todayIndex()
   const date = dayDate(weekStart, meals.day)
   const today = meals.day === t
   const past = meals.day < t
   const s = workout.session
   const all = s ? [...s.warmup, ...s.main, ...s.cooldown] : []
-  const finished = s ? finishedCount(weekStart, meals.day, all) : 0
+  const finished = progress?.workout?.done ?? 0
   const onTarget = Math.abs(meals.totals.kcal - target) <= target * 0.1
 
   return (
@@ -121,7 +151,9 @@ function DayCard({ weekStart, meals, workout, target }: { weekStart: string; mea
           {/* Meals */}
           <div className="flex flex-col">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">Meals</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                Meals{progress && progress.eaten.done > 0 && <span className="ml-2 normal-case tracking-normal text-emerald-700">{progress.eaten.done} of {progress.eaten.total} eaten</span>}
+              </p>
               <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums ${onTarget ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}>
                 {meals.totals.kcal.toLocaleString()} kcal
               </span>
@@ -136,7 +168,9 @@ function DayCard({ weekStart, meals, workout, target }: { weekStart: string; mea
                       <p className="text-[11px] font-semibold text-muted">{MEAL_LABEL[m.slot]}</p>
                       <p className="truncate text-sm text-heading">{m.items.length ? m.items.map((i) => i.name).join(', ') : 'Nothing suitable yet'}</p>
                     </div>
-                    <span className="shrink-0 text-xs tabular-nums text-muted">{Math.round(m.totals.kcal)}</span>
+                    {progress?.meals.includes(m.slot)
+                      ? <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white" title="Eaten"><Icon name="check" className="h-3.5 w-3.5" strokeWidth={3} /></span>
+                      : <span className="shrink-0 text-xs tabular-nums text-muted">{Math.round(m.totals.kcal)}</span>}
                   </li>
                 )
               })}
@@ -153,6 +187,7 @@ function DayCard({ weekStart, meals, workout, target }: { weekStart: string; mea
 
 export function Week() {
   const meals = useMealPlan()
+  const saved = useProgress(meals.state.status === 'ready' ? meals.state.data.plan : null)
   const workouts = useWorkoutPlan()
   const error = [meals.state, workouts.state].find((s) => s.status === 'error')
 
@@ -197,6 +232,8 @@ export function Week() {
         const avgProtein = Math.round(mealPlan.days.reduce((t, d) => t + d.totals.proteinG, 0) / 7)
         return (
           <div className="mt-6 space-y-6">
+            {saved.status === 'ready' && <SoFar p={saved.data} />}
+
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <MiniStat icon="dumbbell" tint="bg-violet/10 text-violet" label="Workouts" value={`${sessions.length} · ${minutes} min`} />
               <MiniStat icon="flame" tint="bg-orange-100 text-orange-500" label="Avg calories / day" value={`${avgKcal.toLocaleString()} kcal`} />
@@ -209,7 +246,7 @@ export function Week() {
             <div>
               <h2 className="mb-3 text-lg font-bold text-heading">Day by day</h2>
               <ol className="space-y-4">
-                {mealPlan.days.map((d) => <DayCard key={d.day} weekStart={weekStart} meals={d} workout={workoutPlan.days[d.day]} target={mealPlan.target.calories} />)}
+                {mealPlan.days.map((d) => <DayCard key={d.day} weekStart={weekStart} meals={d} workout={workoutPlan.days[d.day]} target={mealPlan.target.calories} progress={saved.status === 'ready' ? saved.data.days[d.day] : undefined} />)}
               </ol>
             </div>
           </div>

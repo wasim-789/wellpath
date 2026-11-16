@@ -9,6 +9,7 @@ import { MiniStat, PageHeader } from '../components/app/PageHeader'
 import { StartOver } from '../components/app/StartOver'
 import { DIET_OPTIONS, labelOf } from '../lib/labels'
 import { useMealPlan } from '../lib/meals'
+import { isFuture, setMealEaten, useProgress, type DayProgress } from '../lib/progress'
 import { dayDate, dayFromQuery, todayIndex } from '../lib/week'
 
 function Bar({ label, value, target, unit, color }: { label: string; value: number; target?: number; unit: string; color: string }) {
@@ -24,7 +25,7 @@ function Bar({ label, value, target, unit, color }: { label: string; value: numb
   )
 }
 
-function DaySummary({ date, day, target, today }: { date: Date; day: PlannedDay; target: { calories: number; proteinG: number }; today: boolean }) {
+function DaySummary({ date, day, target, today, progress }: { date: Date; day: PlannedDay; target: { calories: number; proteinG: number }; today: boolean; progress?: DayProgress }) {
   return (
     <section className="card p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -34,6 +35,15 @@ function DaySummary({ date, day, target, today }: { date: Date; day: PlannedDay;
         </h2>
         <p className="text-sm text-muted">{day.meals.length} meals planned</p>
       </div>
+      {progress && progress.eaten.total > 0 && (
+        <div className="mt-4 rounded-xl bg-emerald-50/70 p-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="flex items-center gap-2 font-semibold text-emerald-800"><Icon name="checkCircle" className="h-4 w-4" />Meals eaten</span>
+            <span className="font-bold tabular-nums text-emerald-800">{progress.eaten.done} of {progress.eaten.total}</span>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-white"><div className="h-full rounded-full bg-emerald-500 transition-[width] duration-500" style={{ width: (progress.eaten.done / progress.eaten.total) * 100 + '%' }} /></div>
+        </div>
+      )}
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <Bar label="Calories" value={day.totals.kcal} target={target.calories} unit="kcal" color="bg-gradient-to-r from-orange-400 to-amber-400" />
         <Bar label="Protein" value={day.totals.proteinG} target={target.proteinG} unit="g" color="bg-lilac" />
@@ -58,6 +68,8 @@ function DaySummary({ date, day, target, today }: { date: Date; day: PlannedDay;
 
 export function Meals() {
   const { state, retry, replace } = useMealPlan()
+  // Reloads when the plan changes, since progress is counted against it.
+  const saved = useProgress(state.status === 'ready' ? state.data.plan : null)
   const [params, setParams] = useSearchParams()
   // The day lives in the URL, so links, tabs and the back button all agree.
   const day = dayFromQuery(params.get('day'))
@@ -97,7 +109,7 @@ export function Meals() {
 
             <DayTabs weekStart={weekStart} value={day} onChange={pick} />
 
-            <DaySummary date={dayDate(weekStart, day)} day={current} target={plan.target} today={day === todayIndex()} />
+            <DaySummary date={dayDate(weekStart, day)} day={current} target={plan.target} today={day === todayIndex()} progress={saved.status === 'ready' ? saved.data.days[day] : undefined} />
 
             <div>
               <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
@@ -105,7 +117,12 @@ export function Meals() {
                 <p className="flex items-center gap-1.5 text-sm text-muted"><Icon name="swap" className="h-4 w-4 text-violet" />Not in the mood? Change any meal.</p>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
-                {current.meals.map((m) => <MealCard key={`${day}-${m.slot}`} meal={m} swap={{ weekStart, day, onPlan: replace }} />)}
+                {current.meals.map((m) => (
+                  <MealCard
+                    key={`${day}-${m.slot}`} meal={m} swap={{ weekStart, day, onPlan: replace }}
+                    eaten={saved.status === 'ready' ? { value: saved.data.days[day]!.meals.includes(m.slot), locked: isFuture(saved.data, day), onChange: (v) => void setMealEaten(day, m.slot, v) } : undefined}
+                  />
+                ))}
               </div>
             </div>
 
