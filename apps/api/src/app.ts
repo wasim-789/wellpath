@@ -11,6 +11,7 @@ import { adminRouter } from "./routes/admin.js";
 import { adminAuthRouter, authRouter } from "./routes/auth.js";
 import { healthRouter } from "./routes/health.js";
 import { planRouter } from "./routes/plan.js";
+import { progressRouter } from "./routes/progress.js";
 import { profileRouter } from "./routes/profile.js";
 import { errorHandler, notFound } from "./middleware/errors.js";
 
@@ -30,6 +31,7 @@ export function createApp() {
   app.use("/api/v1/admin/auth", adminAuthRouter, notFound);
   app.use("/api/v1/admin", adminRouter);
   app.use("/api/v1/plan", planRouter);
+  app.use("/api/v1/progress", progressRouter);
   app.use("/api/v1/profile", profileRouter);
 
   app.use(notFound);

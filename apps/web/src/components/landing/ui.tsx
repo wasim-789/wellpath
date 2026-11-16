@@ -33,6 +33,15 @@ export function SectionHeading({ eyebrow, title, sub, align = 'center' }: { eyeb
 export function Logo({ className = '', dark = false, href = '#top' }: { className?: string; dark?: boolean; href?: string }) {
   return (
     <a href={href} className={`flex items-center gap-2.5 ${className}`} aria-label="WellPath home">
+      <LogoMark dark={dark} />
+    </a>
+  )
+}
+
+/** The WellPath mark and name, for wrapping in any kind of link. */
+export function LogoMark({ dark = false }: { dark?: boolean }) {
+  return (
+    <>
       <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
         <defs>
           <linearGradient id="wp-logo" x1="0" y1="0" x2="1" y2="1">
@@ -45,7 +54,7 @@ export function Logo({ className = '', dark = false, href = '#top' }: { classNam
         <circle cx="24" cy="18" r="2.2" fill="#fff" />
       </svg>
       <span className={`text-lg font-bold tracking-tight ${dark ? 'text-white' : 'text-heading'}`}>WellPath</span>
-    </a>
+    </>
   )
 }
 

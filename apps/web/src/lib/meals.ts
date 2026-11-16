@@ -3,6 +3,7 @@ import type { MealChoice, MealPlan, PlannedMeal } from '@wellpath/engine'
 import type { MealSlot } from '@wellpath/shared'
 import { api } from './auth'
 import { useWeekly, type Weekly } from './week'
+import type { IconName } from '../components/app/Icon'
 
 export type MealsResponse = Weekly<MealPlan>
 
@@ -23,3 +24,11 @@ export const undoSwap = (week: string, day: number, slot: MealSlot) =>
   api<MealsResponse>(`/api/v1/plan/meals/swap?${mealQuery(week, day, slot)}`, { method: 'DELETE' })
 
 export const MEAL_LABEL = { breakfast: 'Breakfast', lunch: 'Lunch', snack: 'Evening snack', dinner: 'Dinner' } as const
+
+/** Icon, colours and time of day for each meal, shared with the dashboard. */
+export const SLOT_STYLE: Record<MealSlot, { icon: IconName; tint: string; band: string; when: string }> = {
+  breakfast: { icon: 'sunrise', tint: 'bg-amber-100 text-amber-600', band: 'from-amber-50', when: 'Morning' },
+  lunch: { icon: 'bowl', tint: 'bg-emerald-100 text-emerald-600', band: 'from-emerald-50', when: 'Midday' },
+  snack: { icon: 'cup', tint: 'bg-rose-100 text-rose-500', band: 'from-rose-50', when: 'Evening' },
+  dinner: { icon: 'moon', tint: 'bg-indigo-100 text-violet', band: 'from-indigo-50', when: 'Night' },
+}
