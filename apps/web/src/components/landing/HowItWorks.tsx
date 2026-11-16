@@ -3,7 +3,7 @@ import { Reveal, SectionHeading } from './ui'
 const steps = [
   { n: '01', title: 'Answer a 60-second quiz', body: 'Goal, body, routine, food you like, injuries and how much time you have.' },
   { n: '02', title: 'Get a plan with reasons', body: 'Daily meals, home workouts and water targets, each with a one-line reason you can read.' },
-  { n: '03', title: 'Log in a few taps', body: 'Meals by text, voice or photo. Water, sleep, weight and training in one place.' },
+  { n: '03', title: 'Log in a few taps', body: 'Tick off meals and workouts, or type what you ate the way you say it. Water and weight in the same place.' },
   { n: '04', title: 'Watch it adapt', body: 'Every week WellPath reviews your trend, adjusts targets safely, and tells you exactly why.' },
 ]
 

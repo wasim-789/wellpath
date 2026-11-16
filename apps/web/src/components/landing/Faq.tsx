@@ -1,12 +1,12 @@
 import { Reveal, SectionHeading } from './ui'
 
 const faqs = [
-  { q: 'Is WellPath really free?', a: 'Yes. The full plan, tracker, adaptive targets and the AI coach with a daily question limit are free during beta. No card needed.' },
+  { q: 'Is WellPath really free?', a: 'Yes. The plan, tracker and charts are free during beta, and the AI coach and weekly adaptive targets will be free too when they launch. No card needed.' },
   { q: 'How is this different from a calorie counter?', a: 'Counters record what you ate. WellPath builds the plan, explains every number, and changes your targets each week based on your real progress.' },
   { q: 'Does it work with my local food?', a: 'Yes. WellPath understands everyday dishes and local portions, from a bowl of daal and roti to a chicken salad, and you can log in plain words.' },
   { q: 'Can the AI give me wrong numbers?', a: 'Your calories, macros and safety limits come from tested rules, not the AI. The coach only explains and suggests, and cannot change them.' },
   { q: 'I have an injury or a health condition. Can I use it?', a: 'WellPath removes unsuitable exercises for common problems like knee pain, back pain or high blood pressure and shows a doctor notice. It is not medical advice, so please follow your doctor.' },
-  { q: 'What happens to my data?', a: 'Your data is encrypted in transit, never sold, and your name and email are never sent to the AI. You can export or delete everything at any time.' },
+  { q: 'What happens to my data?', a: 'Your data is encrypted in transit, never sold, and your name and email are never sent to the AI. You can delete your account and all your data at any time, and exporting your data is coming soon.' },
 ]
 
 export function Faq() {

@@ -1,49 +1,43 @@
 import { Icon, Reveal, SectionHeading } from './ui'
 
-const plans = [
-  {
-    name: 'Free',
-    price: '$0',
-    note: 'Free during beta',
-    cta: 'Build my free plan',
-    href: '/signup',
-    featured: true,
-    items: ['Personal food and workout plan', 'Weekly adaptive targets', 'Daily tracker and progress charts', 'AI coach, daily question limit', 'Safety rules and Ramadan mode'],
-  },
-  {
-    name: 'Pro',
-    price: 'Soon',
-    note: 'Join the waitlist',
-    cta: 'Join the waitlist',
-    href: '#final',
-    featured: false,
-    items: ['Everything in Free', 'Unlimited AI coach', 'Photo and voice food logging', 'Family and budget plans', 'Shareable report for your dietitian'],
-  },
+/**
+ * One plan: WellPath is free during beta. Only features that exist or are on the roadmap are listed,
+ * and the ones still being built say so.
+ */
+const items: { text: string; soon?: boolean }[] = [
+  { text: 'Personal food and home workout plan' },
+  { text: 'Safety rules for injuries and health conditions' },
+  { text: 'Daily tracker, streaks and progress charts' },
+  { text: 'Log food in Roman Urdu or English' },
+  { text: 'AI coach, with a daily question limit', soon: true },
+  { text: 'Weekly adaptive targets and report', soon: true },
+  { text: 'Ramadan mode', soon: true },
 ]
 
 export function Pricing() {
   return (
     <section id="pricing" className="py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <SectionHeading eyebrow="Pricing" title={<>Start free. <span className="text-gradient">Stay because it works.</span></>} />
-        <div className="mx-auto mt-14 grid max-w-4xl gap-5 md:grid-cols-2">
-          {plans.map((p, i) => (
-            <Reveal key={p.name} delay={i * 100} className="h-full">
-              <div className={`card relative flex h-full flex-col p-7 ${p.featured ? 'border-violet/50 shadow-[0_0_60px_-20px_rgba(79,70,229,0.45)]' : ''}`}>
-                {p.featured && <span className="absolute -top-3 left-7 rounded-full bg-gradient-to-r from-violet-deep to-lilac px-3 py-1 text-[11px] font-semibold text-white">Most popular</span>}
-                <p className="font-semibold text-heading">{p.name}</p>
-                <p className="mt-3 text-4xl font-extrabold text-heading">{p.price}</p>
-                <p className="mt-1 text-sm text-muted">{p.note}</p>
-                <ul className="mt-6 flex-1 space-y-3">
-                  {p.items.map((it) => (
-                    <li key={it} className="flex gap-2.5 text-sm text-text"><Icon name="check" className="mt-0.5 h-4 w-4 shrink-0 text-mint" />{it}</li>
-                  ))}
-                </ul>
-                <a href={p.href} className={`mt-8 rounded-full px-6 py-3 text-center text-sm font-semibold ${p.featured ? 'btn-primary text-white' : 'border border-line bg-white text-heading hover:bg-ink-2'}`}>{p.cta}</a>
-              </div>
-            </Reveal>
-          ))}
-        </div>
+        <SectionHeading eyebrow="Pricing" title={<>Free while in beta. <span className="text-gradient">Stay because it works.</span></>} />
+        <Reveal className="mx-auto mt-14 max-w-md">
+          <div className="card relative flex flex-col border-violet/50 p-7 shadow-[0_0_60px_-20px_rgba(79,70,229,0.45)]">
+            <p className="font-semibold text-heading">Free</p>
+            <p className="mt-3 text-4xl font-extrabold text-heading">$0</p>
+            <p className="mt-1 text-sm text-muted">Free during beta. No card needed.</p>
+            <ul className="mt-6 flex-1 space-y-3">
+              {items.map((it) => (
+                <li key={it.text} className="flex items-start gap-2.5 text-sm text-text">
+                  <Icon name="check" className={`mt-0.5 h-4 w-4 shrink-0 ${it.soon ? 'text-muted' : 'text-mint'}`} />
+                  <span>
+                    {it.text}
+                    {it.soon && <span className="ml-2 rounded-full bg-ink-3 px-2 py-0.5 text-[11px] font-semibold text-violet">Coming soon</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <a href="/signup" className="btn-primary mt-8 rounded-full px-6 py-3 text-center text-sm font-semibold text-white">Build my free plan</a>
+          </div>
+        </Reveal>
       </div>
     </section>
   )
