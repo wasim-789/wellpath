@@ -35,11 +35,18 @@ type AuthClientOptions = {
 };
 
 const OFFLINE_MESSAGE = "Cannot reach the server. Check your connection and try again.";
+/**
+ * "ok": a new access token. "ended": the server refused the refresh cookie, so the session is over.
+ * "unavailable": the server could not answer right now (offline, too many requests, a server error).
+ */
+export type RefreshResult = "ok" | "ended" | "unavailable";
+
+const BUSY_MESSAGE = "The server is busy. Please wait a moment and try again.";
 
 export function createAuthClient({ baseUrl, authPath, sessionHint }: AuthClientOptions) {
   let state: AuthState = { status: "loading" };
   let accessToken: string | null = null;
-  let refreshing: Promise<boolean> | null = null;
+  let refreshing: Promise<RefreshResult> | null = null;
   const listeners = new Set<() => void>();
 
   function setState(next: AuthState) {
@@ -78,20 +85,22 @@ export function createAuthClient({ baseUrl, authPath, sessionHint }: AuthClientO
   /**
    * Swaps the refresh cookie for a new access token.
    * Callers share one request: each refresh token works once, so two parallel calls would end the session.
+   * Only a refused cookie (401 or 403) signs the user out. A busy, rate-limited or unreachable server keeps
+   * the session, because the cookie is still good and the next try will work.
    */
-  function refreshSession(): Promise<boolean> {
-    refreshing ??= (async () => {
+  function refreshSession(): Promise<RefreshResult> {
+    refreshing ??= (async (): Promise<RefreshResult> => {
       try {
         const res = await send(`${authPath}/refresh`, { method: "POST" });
-        if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
           clearSession();
-          return false;
+          return "ended";
         }
+        if (!res.ok) return "unavailable";
         applySession((await res.json()) as AuthResponse);
-        return true;
+        return "ok";
       } catch {
-        clearSession();
-        return false;
+        return "unavailable";
       } finally {
         refreshing = null;
       }
@@ -100,18 +109,25 @@ export function createAuthClient({ baseUrl, authPath, sessionHint }: AuthClientO
   }
 
   /** Call once on page load. */
-  function restoreSession(): Promise<boolean> {
+  async function restoreSession(): Promise<boolean> {
     if (sessionHint && !sessionHint.get()) {
       clearSession();
-      return Promise.resolve(false);
+      return false;
     }
-    return refreshSession();
+    const result = await refreshSession();
+    // Could not check: show the signed-out screens for now, but keep the hint so the next load tries again.
+    if (result === "unavailable") setState({ status: "signed-out" });
+    return result === "ok";
   }
 
   /** Calls the API as the signed-in user, refreshing the access token once if it has expired. */
   async function api<T>(path: string, init?: RequestInit): Promise<T> {
     let res = await send(path, init);
-    if (res.status === 401 && accessToken && (await refreshSession())) res = await send(path, init);
+    if (res.status === 401 && accessToken) {
+      const result = await refreshSession();
+      if (result === "ok") res = await send(path, init);
+      else if (result === "unavailable") throw new ApiError(503, BUSY_MESSAGE);
+    }
     if (!res.ok) throw await toError(res);
     return (res.status === 204 ? undefined : await res.json()) as T;
   }

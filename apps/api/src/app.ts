@@ -23,7 +23,8 @@ export function createApp() {
   app.use(cors({ origin: env.corsOrigins, credentials: true })); // only our frontends
   app.use(express.json({ limit: "100kb" }));
   app.use(cookieParser());
-  app.use("/api", rateLimit({ windowMs: 60_000, limit: 100 })); // 100 requests/min per IP
+  // 100 requests/min per IP. Off in tests, like the sign-in limiter, where one file can send more than that.
+  app.use("/api", rateLimit({ windowMs: 60_000, limit: 100, skip: () => env.NODE_ENV === "test" }));
 
   app.use("/health", healthRouter);
   app.use("/api/v1/auth", authRouter);

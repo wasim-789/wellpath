@@ -133,6 +133,119 @@ describe("progress", () => {
     expect(await DayLog.countDocuments()).toBe(0);
   });
 
+  it("logs water against a goal from body weight, and counts it as activity", async () => {
+    const { auth } = await ready();
+    const start = await progress(auth);
+    expect(start.body.water).toMatchObject({ glasses: 10, ml: 2500 }); // 70 kg × 35 ml ≈ 10 glasses
+    const water = (body: object) => request(app).put("/api/v1/progress/water").set("Authorization", auth).send({ week: WEEK, today: TODAY, ...body });
+    const res = await water({ day: 5, glasses: 6 });
+    expect(res.status).toBe(200);
+    expect(res.body.days[5]).toMatchObject({ water: 6, active: true });
+    expect(res.body.streak.current).toBe(1);
+    expect((await water({ day: 6, glasses: 1 })).status).toBe(409); // Sunday has not come yet
+    expect((await water({ day: 5, glasses: 31 })).status).toBe(400);
+  });
+
+  it("saves weigh-ins (today or earlier), uses the latest for the water goal, and removes them", async () => {
+    const { auth } = await ready();
+    const weight = (body: object) => request(app).put("/api/v1/progress/weight").set("Authorization", auth).send({ today: TODAY, ...body });
+    expect((await weight({ weightKg: 69.46 })).status).toBe(204);
+    expect((await weight({ date: "2026-11-18", weightKg: 70.2 })).status).toBe(204);
+    expect((await weight({ date: "2026-11-22", weightKg: 69 })).status).toBe(409); // tomorrow
+    expect((await weight({ date: "2026-07-01", weightKg: 69 })).status).toBe(400); // too long ago
+    expect((await weight({ weightKg: 12 })).status).toBe(400);
+
+    let res = await progress(auth);
+    expect(res.body.lastWeight).toEqual({ date: TODAY, weightKg: 69.5 }); // rounded to 0.1 kg
+    expect(res.body.days[2].weightKg).toBe(70.2);
+    expect((await weight({ weightKg: 40 })).status).toBe(204);
+    expect((await progress(auth)).body.water.glasses).toBe(6); // 40 kg → the 6-glass minimum
+
+    const del = await request(app).delete(`/api/v1/progress/weight?today=${TODAY}&date=${TODAY}`).set("Authorization", auth);
+    expect(del.status).toBe(204);
+    res = await progress(auth);
+    expect(res.body.lastWeight).toEqual({ date: "2026-11-18", weightKg: 70.2 });
+    expect(res.body.days[5].active).toBe(false);
+    expect((await request(app).delete(`/api/v1/progress/weight?today=${TODAY}&date=${TODAY}`).set("Authorization", auth)).status).toBe(404);
+  });
+
+  it("gives day-by-day history for the charts, with a 7-day weight trend", async () => {
+    const { auth, plan } = await ready();
+    const weight = (date: string, weightKg: number) => request(app).put("/api/v1/progress/weight").set("Authorization", auth).send({ today: TODAY, date, weightKg });
+    await weight("2026-11-10", 72); // before the 7-day range, but inside the trend's look-back
+    await weight("2026-11-16", 71);
+    await weight("2026-11-21", 70);
+    await meal(auth, { day: 5, slot: "breakfast", eaten: true });
+    await request(app).put("/api/v1/progress/water").set("Authorization", auth).send({ week: WEEK, today: TODAY, day: 4, glasses: 8 });
+
+    const res = await request(app).get(`/api/v1/progress/history?today=${TODAY}&days=7`).set("Authorization", auth);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ from: "2026-11-15", to: TODAY });
+    expect(res.body.days).toHaveLength(7);
+    const byDate = Object.fromEntries(res.body.days.map((d: { date: string }) => [d.date, d]));
+    expect(byDate["2026-11-15"]).toMatchObject({ weightKg: null, meals: 0, workout: null }); // last week, never opened
+    expect(byDate["2026-11-16"].weightKg).toBe(71);
+    expect(byDate["2026-11-20"].water).toBe(8);
+    expect(byDate[TODAY]).toMatchObject({ weightKg: 70, meals: 1 });
+    expect(byDate[TODAY].workout === null).toBe(!plan.days[5].session);
+    expect(res.body.trend).toEqual([{ date: "2026-11-16", trendKg: 71.5 }, { date: TODAY, trendKg: 70.5 }]);
+    expect((await request(app).get(`/api/v1/progress/history?today=${TODAY}&days=12`).set("Authorization", auth)).status).toBe(400);
+  });
+
+  it("reads Roman Urdu text into foods without saving anything", async () => {
+    const { auth } = await ready();
+    const res = await request(app).post("/api/v1/progress/food/read").set("Authorization", auth).send({ text: "nashta: 2 roti aur ek katori daal, pizza, 2 glass pani" });
+    expect(res.status).toBe(200);
+    expect(res.body.items.map((i: { slug: string; amount: string }) => [i.slug, i.amount])).toEqual([["roti", "2 medium roti"], ["daal-masoor", "1 katori"]]);
+    expect(res.body).toMatchObject({ unknown: ["pizza"], slot: "breakfast", water: 2 });
+    expect(await DayLog.countDocuments()).toBe(0);
+    expect((await request(app).post("/api/v1/progress/food/read").set("Authorization", auth).send({ text: "  " })).status).toBe(400);
+    const list = await request(app).get("/api/v1/progress/foods").set("Authorization", auth);
+    expect(list.body.foods.find((f: { slug: string }) => f.slug === "roti")).toMatchObject({ nameRoman: "roti", portions: [{ unit: "roti", label: "1 medium roti", grams: 40 }, expect.anything()] });
+  });
+
+  it("logs foods to a meal with nutrients from the library, counts intake with ticked meals, and removes them", async () => {
+    const { auth } = await ready();
+    const food = (body: object) => request(app).post("/api/v1/progress/food").set("Authorization", auth).send({ week: WEEK, today: TODAY, ...body });
+    // Made-up nutrients from the app are ignored: the server works them out.
+    const res = await food({ day: 5, slot: "snack", items: [{ slug: "samosa", portionIndex: 0, quantity: 2, nutrients: { kcal: 1 } }, { slug: "chai", portionIndex: 0, quantity: 1 }] });
+    expect(res.status).toBe(200);
+    const day = res.body.days[5];
+    expect(day.foods.map((f: { slug: string; amount: string; slot: string }) => [f.slot, f.slug, f.amount])).toEqual([["snack", "samosa", "2 samosas"], ["snack", "chai", "1 cup"]]);
+    const samosa = await FoodModel.findOne({ slug: "samosa" }).lean();
+    expect(day.foods[0].nutrients.kcal).toBe(Math.round((samosa!.per100g.kcal * samosa!.portions[0]!.grams * 2) / 100));
+    const typed = day.foods.reduce((t: number, f: { nutrients: { kcal: number } }) => t + f.nutrients.kcal, 0);
+    expect(day.intake.kcal).toBe(typed);
+    expect(day.active).toBe(true);
+    expect(res.body.targets.calories).toBeGreaterThan(1000);
+
+    // Ticking a planned meal adds its calories to the intake.
+    const ticked = await meal(auth, { day: 5, slot: "breakfast", eaten: true });
+    const plan = (await request(app).get(`/api/v1/plan/meals?week=${WEEK}`).set("Authorization", auth)).body.plan;
+    const breakfast = plan.days[5].meals.find((m: { slot: string }) => m.slot === "breakfast").totals.kcal;
+    expect(ticked.body.days[5].intake.kcal).toBe(typed + breakfast);
+
+    const del = await request(app).delete(`/api/v1/progress/food?week=${WEEK}&today=${TODAY}&day=5&id=${day.foods[0].id}`).set("Authorization", auth);
+    expect(del.status).toBe(200);
+    expect(del.body.days[5].foods.map((f: { slug: string }) => f.slug)).toEqual(["chai"]);
+    expect((await request(app).delete(`/api/v1/progress/food?week=${WEEK}&today=${TODAY}&day=5&id=${day.foods[0].id}`).set("Authorization", auth)).status).toBe(404);
+
+    const history = await request(app).get(`/api/v1/progress/history?today=${TODAY}&days=7`).set("Authorization", auth);
+    expect(history.body.days.at(-1).kcal).toBe(del.body.days[5].intake.kcal);
+    expect(history.body.targetKcal).toBe(res.body.targets.calories);
+  });
+
+  it("refuses unknown foods, missing portions, days still to come and too many items", async () => {
+    const { auth } = await ready();
+    const food = (body: object) => request(app).post("/api/v1/progress/food").set("Authorization", auth).send({ week: WEEK, today: TODAY, ...body });
+    expect((await food({ day: 5, slot: "lunch", items: [{ slug: "pizza", portionIndex: 0, quantity: 1 }] })).status).toBe(404);
+    expect((await food({ day: 5, slot: "lunch", items: [{ slug: "roti", portionIndex: 7, quantity: 1 }] })).status).toBe(400);
+    expect((await food({ day: 6, slot: "lunch", items: [{ slug: "roti", portionIndex: 0, quantity: 1 }] })).status).toBe(409);
+    expect((await food({ day: 5, slot: "lunch", items: [{ slug: "roti", portionIndex: 0, quantity: 0 }] })).status).toBe(400);
+    expect((await food({ day: 5, slot: "lunch", items: Array(21).fill({ slug: "roti", portionIndex: 0, quantity: 1 }) })).status).toBe(400);
+    expect(await DayLog.countDocuments()).toBe(0);
+  });
+
   it("deletes the logs with the account", async () => {
     const { auth } = await ready();
     await meal(auth, { day: 5, slot: "dinner", eaten: true });

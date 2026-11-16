@@ -4,6 +4,7 @@ import { reasonText, type PlannedDay } from '@wellpath/engine'
 import { AppShell, Notice } from '../components/app/AppShell'
 import { DayTabs } from '../components/app/DayTabs'
 import { Icon } from '../components/app/Icon'
+import { FoodLogger, LoggedFoods } from '../components/app/FoodLogger'
 import { MealCard } from '../components/app/MealCard'
 import { MiniStat, PageHeader } from '../components/app/PageHeader'
 import { StartOver } from '../components/app/StartOver'
@@ -110,6 +111,25 @@ export function Meals() {
             <DayTabs weekStart={weekStart} value={day} onChange={pick} />
 
             <DaySummary date={dayDate(weekStart, day)} day={current} target={plan.target} today={day === todayIndex()} progress={saved.status === 'ready' ? saved.data.days[day] : undefined} />
+
+            {saved.status === 'ready' && (
+              <section className="card p-5 sm:p-6">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet/10 text-violet"><Icon name="edit" /></span>
+                  <div>
+                    <h2 className="font-bold text-heading">Log what you ate</h2>
+                    <p className="text-xs text-muted">Something not on the plan? Type it in Roman Urdu or English, like “2 roti aur daal”.</p>
+                  </div>
+                  {saved.data.days[day]!.intake.kcal > 0 && (
+                    <span className="ml-auto shrink-0 rounded-full bg-orange-50 px-3 py-1 text-xs font-bold tabular-nums text-orange-700">{saved.data.days[day]!.intake.kcal.toLocaleString()} kcal eaten</span>
+                  )}
+                </div>
+                <div className="mt-4 space-y-4">
+                  <FoodLogger key={day} day={day} locked={isFuture(saved.data, day)} />
+                  <LoggedFoods day={day} progress={saved.data.days[day]!} />
+                </div>
+              </section>
+            )}
 
             <div>
               <div className="mb-3 flex flex-wrap items-end justify-between gap-2">

@@ -1,4 +1,4 @@
-import { StrictMode, type ReactNode } from 'react'
+import { StrictMode, Suspense, lazy, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createBrowserRouter, Navigate, RouterProvider, useLocation } from 'react-router'
 import './index.css'
@@ -15,6 +15,10 @@ import { Workouts } from './pages/Workouts.tsx'
 import { Week } from './pages/Week.tsx'
 import { Toaster } from './components/Toaster.tsx'
 import { restoreSession, useAuth, wasSignedOutOnPurpose } from './lib/auth.ts'
+
+// The Progress page carries Chart.js, so it loads only when someone opens it.
+const Progress = lazy(() => import('./pages/Progress.tsx').then((m) => ({ default: m.Progress })))
+const pageLoading = <div className="flex min-h-screen items-center justify-center text-sm text-muted" role="status">Loading…</div>
 
 /**
  * Sends signed-out visitors to the login page, then back here after they sign in.
@@ -42,6 +46,7 @@ const router = createBrowserRouter([
   { path: '/meals', element: <RequireUser><Meals /></RequireUser> },
   { path: '/workouts', element: <RequireUser><Workouts /></RequireUser> },
   { path: '/week', element: <RequireUser><Week /></RequireUser> },
+  { path: '/progress', element: <RequireUser><Suspense fallback={pageLoading}><Progress /></Suspense></RequireUser> },
   { path: '/settings', element: <RequireUser><Settings /></RequireUser> },
   { path: '*', element: <Navigate to="/" replace /> },
 ])

@@ -6,12 +6,13 @@ import { useState, type ReactNode } from 'react'
 import { Link, Navigate } from 'react-router'
 import { workoutReasonText, type DailyTargets, type MealPlan, type PlannedMeal, type WorkoutPlan } from '@wellpath/engine'
 import { AppShell, Notice } from '../components/app/AppShell'
+import { FoodLogger, LoggedFoods } from '../components/app/FoodLogger'
 import { Icon, type IconName } from '../components/app/Icon'
 import { useAuth } from '../lib/auth'
 import { DIET_OPTIONS, GOAL_OPTIONS, labelOf } from '../lib/labels'
 import { MEAL_LABEL, SLOT_STYLE, useMealPlan } from '../lib/meals'
 import { useProfile } from '../lib/profile'
-import { setMealEaten, useProgress, type DayProgress, type WeekProgress } from '../lib/progress'
+import { addWater, setMealEaten, useProgress, type DayProgress, type WeekProgress } from '../lib/progress'
 import { dayDate, todayIndex } from '../lib/week'
 import { FOCUS_LABEL, LEVEL_LABEL, useWorkoutPlan } from '../lib/workouts'
 
@@ -419,6 +420,19 @@ function Ring({ value, total, color, children }: { value: number; total: number;
 }
 
 /** Today's workout and meals ticked off, the streak, and the week so far. */
+/** Type in what you ate today, in Roman Urdu or English, and see what is already logged. */
+function LogFoodCard({ progress }: { progress?: DayProgress }) {
+  return (
+    <section className="card p-5 sm:p-6">
+      <CardHeader icon="edit" tint="bg-violet/10 text-violet" title="Log what you ate" sub="Ate something else, or more? Type it the way you say it." />
+      <div className="mt-4 space-y-4">
+        <FoodLogger day={todayIndex()} />
+        {progress && <LoggedFoods day={todayIndex()} progress={progress} />}
+      </div>
+    </section>
+  )
+}
+
 function TodayProgress({ p }: { p: WeekProgress }) {
   const today = p.days[todayIndex()]!
   const w = today.workout
@@ -436,6 +450,16 @@ function TodayProgress({ p }: { p: WeekProgress }) {
         <div className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-extrabold ${p.streak.current ? 'bg-orange-100 text-orange-600' : 'bg-ink-2 text-muted'}`} title={`Best streak: ${p.streak.best} days`}>
           <Icon name="flame" className="h-4 w-4" />{p.streak.current}<span className="text-xs font-semibold">day streak</span>
         </div>
+      </div>
+      <div className="px-5 pt-4">
+        <div className="flex items-baseline justify-between text-sm">
+          <span className="flex items-center gap-1.5 font-bold text-heading"><Icon name="flame" className="h-4 w-4 text-orange-500" />Calories eaten</span>
+          <span className="tabular-nums"><span className="font-extrabold text-heading">{today.intake.kcal.toLocaleString()}</span><span className="text-muted"> / {p.targets.calories.toLocaleString()} kcal</span></span>
+        </div>
+        <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-ink-2">
+          <div className={`h-full rounded-full transition-[width] duration-500 ${today.intake.kcal > p.targets.calories * 1.1 ? 'bg-amber' : 'bg-gradient-to-r from-orange-400 to-amber-400'}`} style={{ width: `${Math.min(100, (today.intake.kcal / p.targets.calories) * 100)}%` }} />
+        </div>
+        <p className="mt-1 text-[11px] text-muted">Planned meals you ticked, plus foods you typed in.</p>
       </div>
       <div className="grid grid-cols-2 gap-3 p-5">
         <div className="flex items-center gap-3">
@@ -456,10 +480,25 @@ function TodayProgress({ p }: { p: WeekProgress }) {
             <p className="text-xs text-muted">{today.eaten.done === today.eaten.total ? 'All eaten' : `${today.eaten.total - today.eaten.done} to go`}</p>
           </div>
         </div>
+        <div className="col-span-2 flex items-center gap-3 rounded-2xl bg-sky-50/70 p-3">
+          <Ring value={today.water} total={p.water.glasses} color="#38bdf8">
+            <span className="text-sm font-extrabold tabular-nums text-heading">{today.water}/{p.water.glasses}</span>
+          </Ring>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-heading">Water</p>
+            <p className="text-xs text-muted">{today.water >= p.water.glasses ? 'Goal reached!' : `${p.water.glasses - today.water} glasses to go`}</p>
+          </div>
+          <button
+            type="button" onClick={() => addWater(todayIndex(), 1)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-sky-500 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-sky-600"
+          >
+            <Icon name="plus" className="h-3.5 w-3.5" strokeWidth={2.8} />Glass
+          </button>
+        </div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-5 py-3 text-xs">
         <span className="text-muted">This week: <span className="font-semibold text-heading">{p.week.workoutsDone} of {p.week.workoutsPlanned}</span> workouts · <span className="font-semibold text-heading">{p.week.mealsEaten} of {p.week.mealsPlanned}</span> meals</span>
-        <Link to="/week" className="font-semibold text-violet hover:underline">See the week</Link>
+        <Link to="/progress" className="font-semibold text-violet hover:underline">See your progress</Link>
       </div>
     </section>
   )
@@ -509,6 +548,7 @@ export function Home() {
               <div className="space-y-6 lg:col-span-2">
                 <TodayWorkout state={workouts.state} retry={workouts.retry} progress={todayProgress} />
                 <TodayMeals state={meals.state} retry={meals.retry} progress={todayProgress} />
+                <LogFoodCard progress={todayProgress} />
               </div>
               <div className="space-y-6">
                 {progress.status === 'ready' && <TodayProgress p={progress.data} />}
