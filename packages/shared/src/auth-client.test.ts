@@ -48,8 +48,35 @@ describe("refreshSession", () => {
     const { client, fetchMock } = setup();
     fetchMock.mockResolvedValueOnce(json(200, session("t1")));
     const results = await Promise.all([client.refreshSession(), client.refreshSession(), client.refreshSession()]);
-    expect(results).toEqual([true, true, true]);
+    expect(results).toEqual(["ok", "ok", "ok"]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("a busy or unreachable server", () => {
+  it("keeps the user signed in when a refresh is rate limited, and says so", async () => {
+    const { client, fetchMock, hint } = setup(false);
+    fetchMock
+      .mockResolvedValueOnce(json(200, session("old")))
+      .mockResolvedValueOnce(json(401, { error: "Not signed in" }))
+      .mockResolvedValueOnce(json(429, { error: "Too many requests" }));
+    await client.login({ email: user.email, password: "pw" });
+    const err = (await client.api("/thing").catch((e: unknown) => e)) as ApiError;
+    expect(err.status).toBe(503);
+    expect(err.message).toMatch(/busy/);
+    expect(client.getState().status).toBe("signed-in");
+    expect(hint.value).toBe(true);
+  });
+
+  it("keeps the hint when the session cannot be checked on page load, so the next load tries again", async () => {
+    const { client, fetchMock, hint } = setup(true);
+    fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    expect(await client.restoreSession()).toBe(false);
+    expect(client.getState().status).toBe("signed-out");
+    expect(hint.value).toBe(true);
+    fetchMock.mockResolvedValueOnce(json(500, { error: "Server error" }));
+    expect(await client.refreshSession()).toBe("unavailable");
+    expect(hint.value).toBe(true);
   });
 });
 
