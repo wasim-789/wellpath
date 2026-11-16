@@ -2,13 +2,11 @@ import { Icon, Reveal, SectionHeading } from './ui'
 
 const features = [
   { icon: 'adapt', title: 'A plan that learns your body', body: 'Your weight trend and what you eat reveal how much energy you really burn. Targets recalibrate every week, not once.' },
-  { icon: 'food', title: 'Log food the way you talk', body: 'Type "2 roti and a bowl of daal" or snap a photo. WellPath understands local portions, from a katori to a plate.' },
+  { icon: 'food', title: 'Log food the way you talk', body: 'Type "2 roti aur ek katori daal" in Roman Urdu or English. WellPath understands local portions, from a katori to a plate.' },
   { icon: 'chat', title: 'An AI coach that shows its work', body: 'Ask anything, any time. Every answer explains why, using your plan and trusted guidelines, never guesses.' },
   { icon: 'shield', title: 'Safety rules built in', body: 'Knee pain, back pain or high blood pressure? Unsafe exercises are removed and a doctor notice is shown.' },
   { icon: 'moon', title: 'Ramadan mode', body: 'Sehri and iftar plans for your city, hydration timing, and light workouts at the right hour.' },
-  { icon: 'wallet', title: 'Plans that fit your budget', body: 'Set a weekly grocery budget. Meals, swaps and a shopping list stay inside it.' },
-  { icon: 'family', title: 'One kitchen, many goals', body: 'Cook one meal for the family. WellPath sets each person’s portion for their own target.' },
-  { icon: 'chart', title: 'Progress you can read', body: 'Clear charts for weight, calories, water and training, plus a weekly report with one goal for next week.' },
+  { icon: 'chart', title: 'Progress you can read', body: 'Clear charts for weight, calories, water and workouts, with a weekly report and one goal for next week coming soon.' },
 ]
 
 export function Features() {
@@ -20,9 +18,9 @@ export function Features() {
           title={<>Most apps give everyone the same plan. <span className="text-gradient">Yours changes with you.</span></>}
           sub="Built for people who have tried the fixed-plan apps and stopped after a week."
         />
-        <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((f, i) => (
-            <Reveal key={f.title} delay={(i % 4) * 80} className="h-full">
+            <Reveal key={f.title} delay={(i % 3) * 80} className="h-full">
               <article className="card group h-full p-6 transition-colors hover:border-violet/40">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet/15 text-lilac transition-transform group-hover:scale-110">
                   <Icon name={f.icon} />
