@@ -1,5 +1,5 @@
 /** Small shared building blocks for the landing page. */
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { useReveal } from '../../hooks/useReveal'
 
 export function Reveal({ children, className = '', delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
@@ -40,16 +40,18 @@ export function Logo({ className = '', dark = false, href = '#top' }: { classNam
 
 /** The WellPath mark and name, for wrapping in any kind of link. */
 export function LogoMark({ dark = false }: { dark?: boolean }) {
+  // Each logo needs its own gradient id: with a shared one, a second logo points at the first, which may be hidden.
+  const gradient = useId()
   return (
     <>
       <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
         <defs>
-          <linearGradient id="wp-logo" x1="0" y1="0" x2="1" y2="1">
+          <linearGradient id={gradient} x1="0" y1="0" x2="1" y2="1">
             <stop offset="0" stopColor="#4F46E5" />
             <stop offset="1" stopColor="#8B5CF6" />
           </linearGradient>
         </defs>
-        <rect width="32" height="32" rx="9" fill="url(#wp-logo)" />
+        <rect width="32" height="32" rx="9" fill={`url(#${gradient})`} />
         <path d="M8 20c4 0 5-8 9-8s4 6 7 6" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" />
         <circle cx="24" cy="18" r="2.2" fill="#fff" />
       </svg>

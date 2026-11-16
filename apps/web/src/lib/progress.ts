@@ -17,8 +17,12 @@ export type DayProgress = {
   meals: MealSlot[]
   workout: { done: number; total: number; complete: boolean } | null
   eaten: { done: number; total: number }
+  water: number
+  weightKg: number | null
   active: boolean
 }
+
+export type WaterTarget = { glasses: number; ml: number; reason: string }
 
 export type WeekProgress = {
   weekStart: string
@@ -26,6 +30,16 @@ export type WeekProgress = {
   days: DayProgress[]
   week: { workoutsDone: number; workoutsPlanned: number; mealsEaten: number; mealsPlanned: number; activeDays: number }
   streak: { current: number; best: number }
+  water: WaterTarget
+  lastWeight: { date: string; weightKg: number } | null
+}
+
+export type History = {
+  from: string
+  to: string
+  days: { date: string; weightKg: number | null; water: number; meals: number; workout: { done: number; total: number } | null }[]
+  trend: { date: string; trendKg: number }[]
+  water: WaterTarget
 }
 
 type State = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; data: WeekProgress }
@@ -52,6 +66,8 @@ const query = () => `week=${localWeekStart()}&today=${localToday()}`
 function load(): Promise<void> {
   loading ??= api<WeekProgress>(`/api/v1/progress?${query()}`)
     .then(async (data) => {
+      // Taps still being saved are newer than this answer: keep them on screen, their save will bring the update.
+      if (busy()) return
       set({ status: 'ready', data })
       await moveOldTicks(data)
     })
@@ -78,31 +94,88 @@ async function moveOldTicks(data: WeekProgress) {
   }
 }
 
+const put = (path: string, body: object) =>
+  api<WeekProgress>(path, { method: 'PUT', body: JSON.stringify({ week: localWeekStart(), today: localToday(), ...body }) })
+
 async function save(path: string, body: object) {
-  const data = await api<WeekProgress>(path, { method: 'PUT', body: JSON.stringify({ week: localWeekStart(), today: localToday(), ...body }) })
-  set({ status: 'ready', data })
+  set({ status: 'ready', data: await put(path, body) })
 }
 
-/** Applies a change on screen at once, saves it, and puts it back if saving fails. */
-async function change(day: number, edit: (d: DayProgress) => DayProgress, path: string, body: object) {
-  const before = state
+/*
+ * Saving taps. Changes show at once; the save is sent once the person pauses (SAVE_DELAY_MS), and quick
+ * repeated taps on the same thing (one exercise, one meal, one day's water) send only the last value.
+ * That keeps the request count low (the API allows about 100 a minute) and stops replies arriving out of
+ * order from showing older values: a reply is shown only once nothing newer is waiting.
+ */
+const SAVE_DELAY_MS = 350
+const queued = new Map<string, { path: string; body: object; timer: ReturnType<typeof setTimeout> }>()
+let inFlight = 0
+let latest: WeekProgress | null = null
+let failure: string | null = null
+
+const busy = () => inFlight > 0 || queued.size > 0
+
+async function flush(key: string) {
+  const job = queued.get(key)
+  if (!job) return
+  queued.delete(key)
+  inFlight++
+  try {
+    latest = await put(job.path, job.body)
+  } catch (err) {
+    failure ??= err instanceof ApiError ? err.message : 'Could not save that. Check your connection and try again.'
+  } finally {
+    inFlight--
+  }
+  if (busy()) return
+  if (failure) {
+    toast(failure, 'error')
+    failure = null
+    latest = null
+    void load() // show what was really saved
+  } else if (latest) {
+    set({ status: 'ready', data: latest })
+    latest = null
+  }
+}
+
+function change(day: number, key: string, edit: (d: DayProgress) => DayProgress, path: string, body: object) {
   if (state.status === 'ready') {
     const days = state.data.days.map((d) => (d.day === day ? edit(d) : d))
     set({ status: 'ready', data: { ...state.data, days } })
   }
-  try {
-    await save(path, { day, ...body })
-  } catch (err) {
-    set(before)
-    toast(err instanceof ApiError ? err.message : 'Could not save that. Check your connection and try again.', 'error')
-  }
+  const id = `${key}|${day}`
+  const waiting = queued.get(id)
+  if (waiting) clearTimeout(waiting.timer)
+  queued.set(id, { path, body: { day, ...body }, timer: setTimeout(() => void flush(id), SAVE_DELAY_MS) })
 }
 
 export const setSets = (day: number, slug: string, sets: number) =>
-  change(day, (d) => ({ ...d, sets: { ...d.sets, [slug]: sets } }), '/api/v1/progress/sets', { slug, sets })
+  change(day, `sets:${slug}`, (d) => ({ ...d, sets: { ...d.sets, [slug]: sets } }), '/api/v1/progress/sets', { slug, sets })
 
 export const setMealEaten = (day: number, slot: MealSlot, eaten: boolean) =>
-  change(day, (d) => ({ ...d, meals: eaten ? [...d.meals, slot] : d.meals.filter((m) => m !== slot) }), '/api/v1/progress/meals', { slot, eaten })
+  change(day, `meal:${slot}`, (d) => ({ ...d, meals: eaten ? [...d.meals.filter((m) => m !== slot), slot] : d.meals.filter((m) => m !== slot) }), '/api/v1/progress/meals', { slot, eaten })
+
+/** Adds (or with a negative number, removes) glasses of water, counting from what is on screen now, so fast taps all count. */
+export function addWater(day: number, delta: number) {
+  if (state.status !== 'ready') return
+  const glasses = Math.min(30, Math.max(0, state.data.days[day]!.water + delta))
+  change(day, 'water', (d) => ({ ...d, water: glasses }), '/api/v1/progress/water', { glasses })
+}
+
+/** Saves a weigh-in (today unless a date is given), then reloads the week so the water goal follows the new weight. */
+export async function saveWeight(weightKg: number, date?: string) {
+  await api<void>('/api/v1/progress/weight', { method: 'PUT', body: JSON.stringify({ today: localToday(), date, weightKg }) })
+  await load()
+}
+
+export async function removeWeight(date: string) {
+  await api<void>('/api/v1/progress/weight?today=' + localToday() + '&date=' + date, { method: 'DELETE' })
+  await load()
+}
+
+/** Day-by-day numbers for the charts. */
+export const fetchHistory = (days: 7 | 30 | 90) => api<History>('/api/v1/progress/history?today=' + localToday() + '&days=' + days)
 
 /** Loads progress when a page opens (and again when the plan changes), and re-renders on every change. */
 export function useProgress(reloadKey?: unknown) {

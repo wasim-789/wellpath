@@ -11,7 +11,7 @@ import { useAuth } from '../lib/auth'
 import { DIET_OPTIONS, GOAL_OPTIONS, labelOf } from '../lib/labels'
 import { MEAL_LABEL, SLOT_STYLE, useMealPlan } from '../lib/meals'
 import { useProfile } from '../lib/profile'
-import { setMealEaten, useProgress, type DayProgress, type WeekProgress } from '../lib/progress'
+import { addWater, setMealEaten, useProgress, type DayProgress, type WeekProgress } from '../lib/progress'
 import { dayDate, todayIndex } from '../lib/week'
 import { FOCUS_LABEL, LEVEL_LABEL, useWorkoutPlan } from '../lib/workouts'
 
@@ -456,10 +456,25 @@ function TodayProgress({ p }: { p: WeekProgress }) {
             <p className="text-xs text-muted">{today.eaten.done === today.eaten.total ? 'All eaten' : `${today.eaten.total - today.eaten.done} to go`}</p>
           </div>
         </div>
+        <div className="col-span-2 flex items-center gap-3 rounded-2xl bg-sky-50/70 p-3">
+          <Ring value={today.water} total={p.water.glasses} color="#38bdf8">
+            <span className="text-sm font-extrabold tabular-nums text-heading">{today.water}/{p.water.glasses}</span>
+          </Ring>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-heading">Water</p>
+            <p className="text-xs text-muted">{today.water >= p.water.glasses ? 'Goal reached!' : `${p.water.glasses - today.water} glasses to go`}</p>
+          </div>
+          <button
+            type="button" onClick={() => addWater(todayIndex(), 1)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-sky-500 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-sky-600"
+          >
+            <Icon name="plus" className="h-3.5 w-3.5" strokeWidth={2.8} />Glass
+          </button>
+        </div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-5 py-3 text-xs">
         <span className="text-muted">This week: <span className="font-semibold text-heading">{p.week.workoutsDone} of {p.week.workoutsPlanned}</span> workouts · <span className="font-semibold text-heading">{p.week.mealsEaten} of {p.week.mealsPlanned}</span> meals</span>
-        <Link to="/week" className="font-semibold text-violet hover:underline">See the week</Link>
+        <Link to="/progress" className="font-semibold text-violet hover:underline">See your progress</Link>
       </div>
     </section>
   )
