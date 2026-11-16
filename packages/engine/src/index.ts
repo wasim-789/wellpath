@@ -154,3 +154,4 @@ export * from "./safety";
 export * from "./meals";
 export * from "./workouts";
 export * from "./tracking";
+export * from "./foodlog";
