@@ -1,0 +1,27 @@
+/**
+ * What a user did on one day: the sets they ticked off for each exercise, and the meals they ate.
+ * One document per user per date. `active` is stored so streaks can be counted with one query.
+ */
+import { Schema, model } from "mongoose";
+import { MEAL_SLOTS } from "@wellpath/shared";
+
+const dayLogSchema = new Schema(
+  {
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    /** The calendar day, YYYY-MM-DD. */
+    date: { type: String, required: true },
+    weekStart: { type: String, required: true },
+    day: { type: Number, required: true, min: 0, max: 6 },
+    /** Sets done per exercise slug. */
+    sets: { type: Schema.Types.Mixed, default: {} },
+    meals: { type: [{ type: String, enum: MEAL_SLOTS }], default: [] },
+    /** True when anything at all was done that day. */
+    active: { type: Boolean, default: false },
+  },
+  { timestamps: true, minimize: false },
+);
+
+dayLogSchema.index({ userId: 1, date: 1 }, { unique: true });
+dayLogSchema.index({ userId: 1, active: 1, date: -1 });
+
+export const DayLog = model("DayLog", dayLogSchema);

@@ -84,6 +84,9 @@ Before deploying: browsers such as Safari block cookies from another site, which
 | GET | `/api/v1/plan/workouts/alternatives` | Up to 3 safe exercises for the same muscles (`?week`, `day`, `slug`) |
 | PUT, DELETE | `/api/v1/plan/workouts/swap` | Swap one exercise for an offered alternative, or put it back |
 | POST | `/api/v1/plan/rebuild` | New meals or new workouts for the week (`{ week, part }`) |
+| GET | `/api/v1/progress` | The week's progress: each day, the week so far and the streak (`?week`, `today`) |
+| PUT | `/api/v1/progress/sets` | Sets done for one exercise (`{ week, today, day, slug, sets }`, 0 clears) |
+| PUT | `/api/v1/progress/meals` | A meal eaten or not (`{ week, today, day, slot, eaten }`) |
 | POST | `/api/v1/auth/register` | Create an account and start a session |
 | POST | `/api/v1/auth/login` | Sign in and start a session |
 | POST | `/api/v1/auth/refresh` | Swap the refresh cookie for a new access token |
@@ -109,6 +112,10 @@ Before deploying: browsers such as Safari block cookies from another site, which
 ### How weekly plans are saved
 
 Each week's meals and workouts are built the first time the week is opened and saved, so they stay the same all week. A plan is rebuilt when the user changes their answers, asks for new meals or workouts, or when a food or exercise in it is deleted or becomes unsafe for them. Weeks that are over are kept exactly as they were.
+
+### How progress is saved
+
+Ticked-off sets and eaten meals are saved to the account, one record per day, so they follow the user to any device. Progress is counted against the week's saved plan. The app sends the user's own date (`today`), so days start at their midnight; days that have not come yet and weeks that are over cannot be changed. The streak counts consecutive days with anything ticked off; until something is done today, the run up to yesterday still counts.
 
 ## Tech stack
 

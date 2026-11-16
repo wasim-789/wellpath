@@ -85,8 +85,8 @@ const mealSwapBody = mealRef.extend({
 const exerciseSwapBody = exerciseRef.extend({ week: z.string().optional(), replacement: z.string().min(1).max(80) });
 const rebuildBody = z.object({ week: z.string().optional(), part: z.enum(["meals", "workouts"]) });
 
-/** The signed-in user's saved week, built or refreshed as needed. */
-async function week(req: Request, weekValue: unknown, { editing = false } = {}) {
+/** The signed-in user's saved week, built or refreshed as needed. Also used by the progress routes. */
+export async function userWeek(req: Request, weekValue: unknown, { editing = false } = {}) {
   const weekStart = requestedWeek(weekValue);
   const user = await User.findById(req.auth!.userId);
   if (!user || user.status !== "active") throw new HttpError(401, "Not signed in");
@@ -109,20 +109,20 @@ function notInPlan<T>(fn: () => T): T {
 /* ---------- meals ---------- */
 
 planRouter.get("/meals", requireAuth, async (req, res) => {
-  const { saved } = await week(req, req.query.week);
+  const { saved } = await userWeek(req, req.query.week);
   res.json({ weekStart: saved.weekStart, plan: saved.meals });
 });
 
 planRouter.get("/meals/alternatives", requireAuth, async (req, res) => {
   const { day, slot } = mealRef.parse(req.query);
-  const { saved, inputs } = await week(req, req.query.week);
+  const { saved, inputs } = await userWeek(req, req.query.week);
   const options = mealAlternatives({ ...inputs.meals(saved.mealsVersion), plan: saved.meals, day, slot });
   res.json({ weekStart: saved.weekStart, day, slot, options });
 });
 
 planRouter.put("/meals/swap", requireAuth, async (req, res) => {
   const { day, slot, items, week: weekValue } = mealSwapBody.parse(req.body);
-  const { saved, inputs } = await week(req, weekValue, { editing: true });
+  const { saved, inputs } = await userWeek(req, weekValue, { editing: true });
   // Only a plate the planner itself offered can be saved, so a swap always follows the diet and safety rules.
   const offered = mealAlternatives({ ...inputs.meals(saved.mealsVersion), plan: saved.meals, day, slot }).find((o) => sameChoice(mealChoice(o), items));
   if (!offered) throw new HttpError(409, "Those options have changed. Please pick again.");
@@ -132,7 +132,7 @@ planRouter.put("/meals/swap", requireAuth, async (req, res) => {
 
 planRouter.delete("/meals/swap", requireAuth, async (req, res) => {
   const { day, slot } = mealRef.parse(req.query);
-  const { saved } = await week(req, req.query.week, { editing: true });
+  const { saved } = await userWeek(req, req.query.week, { editing: true });
   const next = await saveWeek({ ...saved, meals: restoreMeal(saved.meals, day, slot) });
   res.json({ weekStart: next.weekStart, plan: next.meals });
 });
@@ -140,20 +140,20 @@ planRouter.delete("/meals/swap", requireAuth, async (req, res) => {
 /* ---------- workouts ---------- */
 
 planRouter.get("/workouts", requireAuth, async (req, res) => {
-  const { saved } = await week(req, req.query.week);
+  const { saved } = await userWeek(req, req.query.week);
   res.json({ weekStart: saved.weekStart, plan: saved.workouts });
 });
 
 planRouter.get("/workouts/alternatives", requireAuth, async (req, res) => {
   const { day, slug } = exerciseRef.parse(req.query);
-  const { saved, inputs } = await week(req, req.query.week);
+  const { saved, inputs } = await userWeek(req, req.query.week);
   const options = notInPlan(() => exerciseAlternatives({ ...inputs.workouts(saved.workoutsVersion), plan: saved.workouts, day, slug }));
   res.json({ weekStart: saved.weekStart, day, slug, options });
 });
 
 planRouter.put("/workouts/swap", requireAuth, async (req, res) => {
   const { day, slug, replacement, week: weekValue } = exerciseSwapBody.parse(req.body);
-  const { saved, inputs } = await week(req, weekValue, { editing: true });
+  const { saved, inputs } = await userWeek(req, weekValue, { editing: true });
   const options = notInPlan(() => exerciseAlternatives({ ...inputs.workouts(saved.workoutsVersion), plan: saved.workouts, day, slug }));
   const pick = options.find((o) => o.slug === replacement);
   if (!pick) throw new HttpError(409, "Those options have changed. Please pick again.");
@@ -163,7 +163,7 @@ planRouter.put("/workouts/swap", requireAuth, async (req, res) => {
 
 planRouter.delete("/workouts/swap", requireAuth, async (req, res) => {
   const { day, slug } = exerciseRef.parse(req.query);
-  const { saved } = await week(req, req.query.week, { editing: true });
+  const { saved } = await userWeek(req, req.query.week, { editing: true });
   const next = await saveWeek({ ...saved, workouts: notInPlan(() => restoreExercise(saved.workouts, day, slug)) });
   res.json({ weekStart: next.weekStart, plan: next.workouts });
 });
@@ -172,7 +172,7 @@ planRouter.delete("/workouts/swap", requireAuth, async (req, res) => {
 
 planRouter.post("/rebuild", requireAuth, async (req, res) => {
   const { part, week: weekValue } = rebuildBody.parse(req.body);
-  const { saved, inputs } = await week(req, weekValue, { editing: true });
+  const { saved, inputs } = await userWeek(req, weekValue, { editing: true });
   if (part === "meals") {
     const mealsVersion = saved.mealsVersion + 1;
     const next = await saveWeek({ ...saved, mealsVersion, meals: planMeals(inputs.meals(mealsVersion)) });
